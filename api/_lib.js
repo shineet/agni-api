@@ -33,13 +33,21 @@ async function supabaseRPC(fn, args) {
   const url = `${process.env.SUPABASE_URL}/rest/v1/rpc/${fn}`;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  // Supabase has two generations of key. The legacy service_role key is a JWT
+  // and goes in both headers. The current sb_secret_… key is not a JWT, and
+  // putting a non-JWT in Authorization is how you get an "invalid JWT" 401.
+  // Detecting on the shape means either generation works.
+  const headers = {
+    'content-type': 'application/json',
+    apikey: key
+  };
+  if (key.startsWith('eyJ')) {
+    headers.authorization = `Bearer ${key}`;
+  }
+
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      apikey: key,
-      authorization: `Bearer ${key}`
-    },
+    headers,
     body: JSON.stringify(args)
   });
 

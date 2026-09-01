@@ -41,7 +41,7 @@ identifies a phone, not a person. No account, no email, nothing traceable to any
 | `ANTHROPIC_API_KEY` | The key that pays for trial usage |
 | `APP_TOKEN` | Shared secret the app sends as `Authorization: Bearer …` |
 | `SUPABASE_URL` | The Agni Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key, server side only, never in the app |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase secret key (`sb_secret_…`), or a legacy service_role key. Server side only, never in the app. |
 | `FREE_ESTIMATE_LIMIT` | Optional, defaults to 50 |
 
 `APP_TOKEN` ships inside the app binary and is therefore extractable by anyone determined.
@@ -51,7 +51,8 @@ The per-install quota is the real defence, not the token. Rotate it if it is eve
 
 1. Create a Supabase project for Agni, separate from the other apps.
 2. Run `schema.sql` in its SQL editor.
-3. Deploy this repo to Vercel and set the environment variables above.
+3. Deploy this repo to Vercel and set the environment variables above. For the key,
+   use Settings -> API Keys -> **Secret keys -> default**, not the publishable one.
 4. Put the deployment URL and `APP_TOKEN` into the app's `BackendConfig.swift`.
 
 ## Managing testers
