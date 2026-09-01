@@ -29,8 +29,16 @@ export function validateRequest(body) {
   return null;
 }
 
+/// Accepts either form Supabase shows you: the bare project URL from Settings,
+/// or the Data API URL, which already ends in /rest/v1/. Pasting the second into
+/// a variable the code appends /rest/v1/ to is an easy and very confusing 404.
+function supabaseBase() {
+  const raw = (process.env.SUPABASE_URL || '').trim();
+  return raw.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
+}
+
 async function supabaseRPC(fn, args) {
-  const url = `${process.env.SUPABASE_URL}/rest/v1/rpc/${fn}`;
+  const url = `${supabaseBase()}/rest/v1/rpc/${fn}`;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   // Supabase has two generations of key. The legacy service_role key is a JWT
