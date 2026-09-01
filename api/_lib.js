@@ -38,8 +38,16 @@ function supabaseBase() {
 }
 
 async function supabaseRPC(fn, args) {
-  const url = `${supabaseBase()}/rest/v1/rpc/${fn}`;
+  const base = supabaseBase();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Named explicitly. A missing SUPABASE_URL otherwise surfaces as a confusing
+  // "Failed to parse URL" from fetch, which reads like a code bug rather than
+  // an environment variable nobody set.
+  if (!base) throw new Error('SUPABASE_URL is not set on this deployment.');
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set on this deployment.');
+
+  const url = `${base}/rest/v1/rpc/${fn}`;
 
   // Supabase has two generations of key. The legacy service_role key is a JWT
   // and goes in both headers. The current sb_secret_… key is not a JWT, and
@@ -63,6 +71,15 @@ async function supabaseRPC(fn, args) {
     throw new Error(`Supabase ${fn} failed: ${response.status} ${await response.text()}`);
   }
   return response.json();
+}
+
+/// Fails loudly in the logs, quietly to the caller.
+///
+/// The first failure of this service was a 503 with nothing in the logs to say
+/// why, because the reason was caught and dropped. A tester never needs the
+/// detail; whoever is debugging it always does.
+function report(where, error) {
+  console.error(`[agni-api] ${where}: ${error?.message || error}`);
 }
 
 export async function checkQuota(installId) {

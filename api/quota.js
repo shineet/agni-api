@@ -1,4 +1,4 @@
-import { authorised, checkQuota, json } from './_lib.js';
+import { authorised, checkQuota, json, report } from './_lib.js';
 
 /// How many free estimates are left, so Settings can show it before someone
 /// runs out rather than only at the moment they do.
@@ -16,6 +16,7 @@ export default async function handler(req, res) {
     const quota = await checkQuota(installId);
     return json(res, 200, quota);
   } catch (error) {
+    report('quota check', error);
     return json(res, 503, { error: { type: 'quota_unavailable', message: 'Could not check usage.' } });
   }
 }

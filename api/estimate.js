@@ -1,4 +1,4 @@
-import { authorised, validateRequest, checkQuota, consume, json } from './_lib.js';
+import { authorised, validateRequest, checkQuota, consume, json, report } from './_lib.js';
 
 /// Authenticated proxy to the Anthropic Messages API.
 ///
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
   try {
     quota = await checkQuota(installId);
   } catch (error) {
+    report('quota check', error);
     return json(res, 503, { error: { type: 'quota_unavailable', message: 'Could not check usage.' } });
   }
 
@@ -55,6 +56,7 @@ export default async function handler(req, res) {
       body: JSON.stringify(request)
     });
   } catch (error) {
+    report('anthropic call', error);
     return json(res, 502, { error: { type: 'upstream_unreachable', message: 'Could not reach Anthropic.' } });
   }
 
@@ -67,6 +69,7 @@ export default async function handler(req, res) {
       await consume(installId);
     } catch (error) {
       // The estimate already succeeded. Losing the count is the lesser failure.
+      report('consume', error);
     }
   }
 
