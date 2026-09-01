@@ -78,7 +78,7 @@ async function supabaseRPC(fn, args) {
 /// The first failure of this service was a 503 with nothing in the logs to say
 /// why, because the reason was caught and dropped. A tester never needs the
 /// detail; whoever is debugging it always does.
-function report(where, error) {
+export function report(where, error) {
   console.error(`[agni-api] ${where}: ${error?.message || error}`);
 }
 
