@@ -70,7 +70,13 @@ async function supabaseRPC(fn, args) {
   if (!response.ok) {
     throw new Error(`Supabase ${fn} failed: ${response.status} ${await response.text()}`);
   }
-  return response.json();
+
+  // A function that returns void answers 204 with an empty body, and .json()
+  // throws on nothing at all. That threw AFTER the row had already been
+  // written, so the insert worked, the caller counted it as a failure, and
+  // every submit answered "accepted: 0" while the data quietly landed.
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
 /// Fails loudly in the logs, quietly to the caller.
