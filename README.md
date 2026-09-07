@@ -64,6 +64,32 @@ What to add to the bundled table next, best corroborated first:
 
     select * from agni_community_dishes order by submitters desc limit 50;
 
+## What Agni did not know
+
+`/api/misses` collects the list every phone is already keeping locally: dishes a
+photo could not match, searches that came back empty, barcodes with nothing
+behind them, and the strongest signal of all, a dish somebody looked at their
+own plate and NAMED that the table had no entry for. Schema in
+`schema-misses.sql`.
+
+Write only, deliberately. There is no GET: nothing in the app reads it back, and
+an endpoint that could serve it would be a way to enumerate what other people
+have been eating.
+
+Different from the dish table in one way that matters. That one is republished
+to strangers, so it needs two independent submitters before anything is shown.
+This one is read by one person deciding what to build, and its whole value is
+the LONG TAIL, so single reports are kept and the install count is surfaced
+instead. Order by people, not by noise.
+
+Each phone sends its running count and the server replaces rather than adds, so
+an upload that runs twice does not look like twice the interest. Uploads happen
+at most once a day.
+
+The backlog, most wanted first:
+
+    select * from agni_missing_dishes order by people desc, times desc limit 50;
+
 ## Environment variables
 
 | Name | What |

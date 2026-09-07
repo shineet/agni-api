@@ -121,6 +121,20 @@ export async function searchDishes(query, limit) {
   return Array.isArray(rows) ? rows : [];
 }
 
+/// Records one phone's count for one missing dish. Idempotent: the phone sends
+/// its running total, which replaces what is stored rather than adding to it.
+export async function reportMiss(installId, miss) {
+  await supabaseRPC('agni_report_miss', {
+    p_install_id: installId,
+    p_key: miss.key,
+    p_name: miss.name,
+    p_kind: miss.kind,
+    p_times: miss.times ?? 1,
+    p_first_seen: miss.firstSeen ?? null,
+    p_last_seen: miss.lastSeen ?? null
+  });
+}
+
 export function json(res, status, body) {
   res.status(status).setHeader('content-type', 'application/json');
   res.send(JSON.stringify(body));
