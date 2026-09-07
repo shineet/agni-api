@@ -95,6 +95,32 @@ export async function consume(installId) {
   return typeof used === 'number' ? used : Number(used);
 }
 
+/// Records one person's version of a dish. Their own previous answer for the
+/// same dish is replaced, so somebody entering chapati every week is one voice.
+export async function submitDish(installId, dish) {
+  await supabaseRPC('agni_submit_dish', {
+    p_install_id: installId,
+    p_key: dish.key,
+    p_name: dish.name,
+    p_unit: dish.unit ?? 'serving',
+    p_grams_per_unit: dish.gramsPerUnit ?? 0,
+    p_kcal: dish.kcal,
+    p_protein_g: dish.proteinG ?? 0,
+    p_carbs_g: dish.carbsG ?? 0,
+    p_fat_g: dish.fatG ?? 0
+  });
+}
+
+/// Published dishes only. The view behind this is what enforces that, so no
+/// caller can leak an uncorroborated entry by forgetting a condition.
+export async function searchDishes(query, limit) {
+  const rows = await supabaseRPC('agni_search_dishes', {
+    p_query: query,
+    p_limit: limit
+  });
+  return Array.isArray(rows) ? rows : [];
+}
+
 export function json(res, status, body) {
   res.status(status).setHeader('content-type', 'application/json');
   res.send(JSON.stringify(body));

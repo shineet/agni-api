@@ -34,6 +34,36 @@ keep working with no API at all.
 An install id is a UUID the app generates on first launch and keeps in its Keychain. It
 identifies a phone, not a person. No account, no email, nothing traceable to anyone.
 
+## The shared dish table
+
+`/api/dishes` is how a dish one person adds by hand becomes a dish everybody
+can find. Schema in `schema-community.sql`, run once after `schema.sql`.
+
+Every hand-added dish is contributed silently. Nobody is asked, because a
+prompt is a tax on the person doing you a favour and most people decline it out
+of habit rather than intent. That puts the whole burden on two rules in the
+database:
+
+- **One row per dish per install.** Somebody entering chapati every week is one
+  voice, not fifty.
+- **Nothing is published until two independent installs have named it.** That is
+  the privacy gate and the quality gate at once. "Amma's kozhukatta" is typed by
+  exactly one person and is therefore never shown to anyone; a name two
+  strangers both arrived at is a real dish, and its figures are the median of
+  what each of them said rather than the word of whoever typed first.
+
+A community dish is searchable but never authoritative. It never anchors a
+photo estimate: that stays the bundled table only, for the same reason the USDA
+table does not anchor either. A wrong match there replaces a correct figure with
+a confident wrong one.
+
+    GET  /api/dishes?q=kothu          search published dishes
+    POST /api/dishes { dishes: [...] } contribute, header x-agni-install
+
+What to add to the bundled table next, best corroborated first:
+
+    select * from agni_community_dishes order by submitters desc limit 50;
+
 ## Environment variables
 
 | Name | What |
