@@ -141,6 +141,17 @@ export async function reportMiss(installId, miss) {
   });
 }
 
+/// The variant cache, both directions. Returns null on a miss rather than
+/// throwing: a miss is the ordinary case, not a failure.
+export async function cachedVariants(key) {
+  const payload = await supabaseRPC('agni_cached_variants', { p_key: key });
+  return payload ?? null;
+}
+
+export async function cacheVariants(key, variants) {
+  await supabaseRPC('agni_cache_variants', { p_key: key, p_payload: variants });
+}
+
 export function json(res, status, body) {
   res.status(status).setHeader('content-type', 'application/json');
   res.send(JSON.stringify(body));
