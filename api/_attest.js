@@ -40,7 +40,7 @@ const NONCE_OID = '1.2.840.113635.100.8.2';
 /// Deliberately narrow: it walks tag-length-value structures looking for the
 /// OID, then takes the OCTET STRING that follows. It never interprets anything
 /// it does not recognise and throws instead of guessing.
-function extensionValue(der, oidBytes) {
+export function extensionValue(der, oidBytes) {
   for (let i = 0; i + oidBytes.length <= der.length; i += 1) {
     if (!der.subarray(i, i + oidBytes.length).equals(oidBytes)) continue;
     // The extension is SEQUENCE { OID, [critical], OCTET STRING value }.
@@ -64,8 +64,31 @@ function readDERLength(der, offset) {
   return { length, next: offset + 1 + count };
 }
 
-/// The OID above, as it appears in DER: 06 0A then the encoded arc bytes.
-const NONCE_OID_DER = Buffer.from([0x06, 0x0a, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x63, 0x64, 0x08, 0x02]);
+/// The OID above, as it appears in DER.
+///
+/// COMPUTED, NOT TYPED. This was hand-written as
+/// `06 0a 2a 86 48 86 f7 63 64 08 02` and the length byte was wrong: the arc
+/// encoding is NINE bytes, not ten. The pattern therefore matched no real
+/// certificate, every attestation failed with "nonce extension not found", and
+/// the mistake was invisible because it is a single digit in a row of hex.
+///
+/// It fails CLOSED, which is the only good thing about it. Deriving the bytes
+/// means the same slip cannot happen again, and `encodeOID` is covered by a
+/// test against a certificate that genuinely carries the extension.
+export function encodeOID(dotted) {
+  const parts = dotted.split('.').map(Number);
+  const content = [40 * parts[0] + parts[1]];
+  for (const arc of parts.slice(2)) {
+    const digits = [];
+    let value = arc;
+    do { digits.unshift(value & 0x7f); value >>= 7; } while (value > 0);
+    for (let i = 0; i < digits.length - 1; i += 1) digits[i] |= 0x80;
+    content.push(...digits);
+  }
+  return Buffer.from([0x06, content.length, ...content]);
+}
+
+const NONCE_OID_DER = encodeOID(NONCE_OID);
 
 // MARK: - Authenticator data
 
@@ -98,6 +121,8 @@ function appIdHash() {
 /// Verifies a fresh attestation and returns the public key to remember.
 ///
 /// `challenge` is the exact nonce this server issued and has not seen used.
+export const NONCE_OID_BYTES = NONCE_OID_DER;
+
 export function verifyAttestation({ attestationBase64, keyIdBase64, challenge }) {
   const attestation = decodeCBOR(Buffer.from(attestationBase64, 'base64'));
 
