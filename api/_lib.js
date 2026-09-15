@@ -10,11 +10,55 @@ export const FREE_LIMIT = Number(process.env.FREE_ESTIMATE_LIMIT || 50);
 const ALLOWED_MODELS = new Set(['claude-sonnet-5', 'claude-haiku-4-5']);
 const MAX_TOKENS_CAP = 4096;
 
+/// THE LEGACY PATH, and its sunset.
+///
+/// The shared token ships inside the app binary and anyone can extract it from
+/// an IPA. It is not authentication and must not be treated as such once Agni
+/// is public. It stays only so builds already on testers' phones keep working
+/// while App Attest rolls out.
+///
+/// SERVER-CONTROLLED. Set LEGACY_TOKEN_ENABLED=false on Vercel and every legacy
+/// request stops being accepted, with no app release and no redeploy of the
+/// client. Before public launch this must be off.
+export function legacyTokenEnabled() {
+  return (process.env.LEGACY_TOKEN_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
 export function authorised(req) {
+  if (!legacyTokenEnabled()) return false;
   const expected = process.env.APP_TOKEN;
   if (!expected) return false;
   const header = req.headers.authorization || '';
   return header === `Bearer ${expected}`;
+}
+
+/// Errors the app knows how to explain. The provider's own words never reach a
+/// customer: they can carry internals, and "overloaded_error" is not something
+/// anybody photographing their lunch can act on.
+export const AgniError = {
+  serviceUnavailable: 'serviceUnavailable',
+  rateLimited: 'rateLimited',
+  usageLimitReached: 'usageLimitReached',
+  subscriptionRequired: 'subscriptionRequired',
+  invalidRequest: 'invalidRequest',
+  temporaryVerificationFailure: 'temporaryVerificationFailure'
+};
+
+export function fail(res, status, type, message) {
+  return json(res, status, { error: { type, message } });
+}
+
+/// The master switch. One environment variable stops all AI spend immediately,
+/// without taking the deployment down and without an app release.
+export function aiEnabled() {
+  return (process.env.AI_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+/// How many complimentary analyses a new, attested installation gets before it
+/// is asked to subscribe. Remotely configurable, deliberately: the number is a
+/// commercial decision and must not need an app release to change.
+export function complimentaryLimit() {
+  return Number(process.env.FREE_AI_ANALYSES || 3);
 }
 
 export function validateRequest(body) {
@@ -32,52 +76,8 @@ export function validateRequest(body) {
 /// Accepts either form Supabase shows you: the bare project URL from Settings,
 /// or the Data API URL, which already ends in /rest/v1/. Pasting the second into
 /// a variable the code appends /rest/v1/ to is an easy and very confusing 404.
-function supabaseBase() {
-  const raw = (process.env.SUPABASE_URL || '').trim();
-  return raw.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
-}
+import { supabaseRPC } from './_supabase.js';
 
-async function supabaseRPC(fn, args) {
-  const base = supabaseBase();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  // Named explicitly. A missing SUPABASE_URL otherwise surfaces as a confusing
-  // "Failed to parse URL" from fetch, which reads like a code bug rather than
-  // an environment variable nobody set.
-  if (!base) throw new Error('SUPABASE_URL is not set on this deployment.');
-  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set on this deployment.');
-
-  const url = `${base}/rest/v1/rpc/${fn}`;
-
-  // Supabase has two generations of key. The legacy service_role key is a JWT
-  // and goes in both headers. The current sb_secret_… key is not a JWT, and
-  // putting a non-JWT in Authorization is how you get an "invalid JWT" 401.
-  // Detecting on the shape means either generation works.
-  const headers = {
-    'content-type': 'application/json',
-    apikey: key
-  };
-  if (key.startsWith('eyJ')) {
-    headers.authorization = `Bearer ${key}`;
-  }
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(args)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Supabase ${fn} failed: ${response.status} ${await response.text()}`);
-  }
-
-  // A function that returns void answers 204 with an empty body, and .json()
-  // throws on nothing at all. That threw AFTER the row had already been
-  // written, so the insert worked, the caller counted it as a failure, and
-  // every submit answered "accepted: 0" while the data quietly landed.
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
 
 /// Fails loudly in the logs, quietly to the caller.
 ///
