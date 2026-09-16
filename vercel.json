@@ -5,6 +5,7 @@
     "api/quota.js": { "maxDuration": 10 },
     "api/variants.js": { "maxDuration": 30 },
     "api/dishes.js": { "maxDuration": 10 },
-    "api/misses.js": { "maxDuration": 10 }
+    "api/misses.js": { "maxDuration": 10 },
+    "api/join.js": { "maxDuration": 15 }
   }
 }

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join the Agni beta</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#0B0A09; --surface:#151312; --surface2:#1E1B18;
+    --line:rgba(245,230,214,.10); --line2:rgba(245,230,214,.18);
+    --ink:#F4EFE8; --ink2:#A89E93; --ink3:#6F665D;
+    --flame:#F0894A; --green:#4BBF63; --red:#E8705A;
+    --display:'Bricolage Grotesque','Iowan Old Style',Georgia,serif;
+    --body:'IBM Plex Sans','Helvetica Neue',Arial,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--ground);color:var(--ink)}
+  body{font-family:var(--body);font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 20px}
+  .card{width:100%;max-width:470px;position:relative}
+  .card::before{content:"";position:absolute;top:-180px;left:50%;transform:translateX(-50%);
+    width:460px;height:320px;background:radial-gradient(ellipse at center,rgba(240,137,74,.20),transparent 68%);
+    filter:blur(26px);pointer-events:none}
+  .brand{position:relative;display:flex;align-items:center;gap:10px;margin-bottom:26px}
+  .brand svg{width:24px;height:24px}
+  .brand b{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+  .brand span{color:var(--ink3);font-size:13.5px;border-left:1px solid var(--line2);padding-left:10px;line-height:1.3}
+  h1{position:relative;font-family:var(--display);font-weight:800;font-size:clamp(28px,7vw,38px);
+     line-height:1.08;letter-spacing:-.022em;margin:0 0 14px;text-wrap:balance}
+  .lede{position:relative;color:var(--ink2);margin:0 0 28px}
+  form{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:24px}
+  label{display:block;font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+        color:var(--ink3);margin:0 0 7px}
+  input{width:100%;background:var(--surface2);border:1px solid var(--line2);border-radius:11px;
+        color:var(--ink);font-family:var(--body);font-size:17px;padding:13px 15px;margin-bottom:18px}
+  input:focus{outline:2px solid var(--flame);outline-offset:1px;border-color:transparent}
+  input::placeholder{color:var(--ink3)}
+  .trap{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  button{width:100%;background:var(--flame);color:#1A0E06;border:0;border-radius:999px;
+         font-family:var(--body);font-weight:600;font-size:17px;padding:15px;cursor:pointer}
+  button:hover:not(:disabled){filter:brightness(1.07)}
+  button:disabled{opacity:.55;cursor:default}
+  .note{color:var(--ink3);font-size:14px;margin:16px 0 0;line-height:1.55}
+  .out{position:relative;margin-top:18px;padding:15px 17px;border-radius:13px;font-size:15.5px;
+       border:1px solid var(--line);background:var(--surface);display:none}
+  .out.show{display:block}
+  .out.good{border-color:rgba(75,191,99,.4);color:var(--ink)}
+  .out.bad{border-color:rgba(232,112,90,.45);color:var(--ink)}
+  .out b{display:block;font-family:var(--display);font-weight:700;font-size:17px;margin-bottom:4px}
+  .out.good b{color:var(--green)}
+  .out.bad b{color:var(--red)}
+  footer{position:relative;color:var(--ink3);font-size:13.5px;margin-top:24px;line-height:1.6}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0894A" d="M12 1.6c.5 3.4-1.3 4.7-2.7 6.2C7.7 9.5 6.4 11 6.4 13.6a5.6 5.6 0 0 0 11.2 0c0-2-.8-3.3-1.8-4.6-.4 1-1 1.7-1.8 2.1.5-2.3-.1-4.6-2-9.5Z"/></svg>
+    <b>Agni</b><span>Better Choices<br>A Brighter You</span>
+  </div>
+
+  <h1>Join the beta</h1>
+  <p class="lede">Twenty places. Put your email in and TestFlight will send you the invitation straight away.</p>
+
+  <form id="f" novalidate>
+    <label for="name">Your name</label>
+    <input id="name" name="name" type="text" autocomplete="name" placeholder="Nidhi Sharma" maxlength="80">
+
+    <label for="email">Email for the invitation</label>
+    <input id="email" name="email" type="email" autocomplete="email" inputmode="email"
+           placeholder="you@example.com" maxlength="254" required>
+
+    <div class="trap" aria-hidden="true">
+      <label for="company">Company</label>
+      <input id="company" name="company" type="text" tabindex="-1" autocomplete="off">
+    </div>
+
+    <button id="go" type="submit">Send me the invitation</button>
+    <p class="note">Use the address on your Apple ID, because that is the one TestFlight can invite.</p>
+  </form>
+
+  <div class="out" id="out" role="status" aria-live="polite"></div>
+
+  <footer>
+    Your address is used to send the TestFlight invitation and to answer you if you report something.
+    Nothing else, and it goes nowhere else.
+  </footer>
+</main>
+
+<script>
+  var form = document.getElementById('f');
+  var out = document.getElementById('out');
+  var go = document.getElementById('go');
+
+  function say(kind, title, text) {
+    out.className = 'out show ' + kind;
+    out.innerHTML = '';
+    var b = document.createElement('b'); b.textContent = title;
+    var p = document.createElement('span'); p.textContent = text;
+    out.appendChild(b); out.appendChild(p);
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var email = document.getElementById('email').value.trim();
+    if (!email) { say('bad', 'One thing missing', 'Put your email address in first.'); return; }
+
+    go.disabled = true;
+    go.textContent = 'Sending';
+
+    fetch('/api/join', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: document.getElementById('name').value,
+        email: email,
+        company: document.getElementById('company').value
+      })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (data) {
+      var message = data.message || 'Something went wrong. Try again in a moment.';
+      if (data.ok) {
+        say('good', data.status === 'already' ? 'You are already in' : 'Check your email', message);
+        form.style.display = 'none';
+      } else {
+        say('bad', data.status === 'full' ? 'The beta is full' : 'Not quite', message);
+        go.disabled = false;
+        go.textContent = 'Send me the invitation';
+      }
+    }).catch(function () {
+      say('bad', 'No connection', 'That did not reach the server. Check your connection and try again.');
+      go.disabled = false;
+      go.textContent = 'Send me the invitation';
+    });
+  });
+</script>
+</body>
+</html>
