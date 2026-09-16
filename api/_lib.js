@@ -57,6 +57,105 @@ export function aiEnabled() {
 /// How many complimentary analyses a new, attested installation gets before it
 /// is asked to subscribe. Remotely configurable, deliberately: the number is a
 /// commercial decision and must not need an app release to change.
+/// Timeouts, ordered so each layer outlives the one below it.
+///
+/// A slow upstream then produces a clean structured error instead of a
+/// connection cut at a random point. A Sonnet vision call is normally 5 to 15
+/// seconds, so 40 is generous without being indefinite.
+///
+///   Anthropic upstream   40s   (here)
+///   Vercel function      55s   (vercel.json)
+///   Agni client          65s   (AnthropicConfig)
+export const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 40_000);
+
+/// The largest request body accepted, in bytes.
+///
+/// MEASURED, not guessed. At Agni's real settings a food estimate body is about
+/// 280 KB: a 1568px JPEG at quality 0.7 is 203 KB, which is 270 KB once base64
+/// encoded, plus about 5 KB of prompt and schema. A drink routing check is
+/// about 30 KB.
+///
+/// 1.5 MB is roughly five times the food payload. It rejects a full-resolution
+/// photograph outright while leaving room for a denser picture than the one
+/// measured.
+///
+/// Deliberately NOT accompanied by server-side JPEG dimension parsing: this cap
+/// already bounds the cost, and decoding image headers would be more parsing
+/// code inside a security path for no further protection.
+export const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 1_500_000);
+
+/// Approved limits, per attested key. Every one is remotely configurable, so a
+/// limit that turns out to be wrong is an environment variable rather than a
+/// deploy.
+///
+/// Derived from measured usage rather than chosen: ONE FOOD PHOTO IS TWO AI
+/// CALLS, the drink routing check and the estimate, so a limit in calls reads
+/// as half that in photographs.
+///
+///   per minute  10   one photo is 2 calls in ~5s; a double retry is 4; a thali
+///                    plus three breakdowns is 5. Five times the busiest
+///                    legitimate minute, and it stops a script immediately.
+///   per hour    60   an active hour, four meals with corrections, is about 15.
+///   per day    100   a heavy user is 25 to 30.
+///   spend    $1.00   a normal user costs $0.07 to $0.13 a day, heavy about
+///                    $0.40. Bounds the worst case 100 calls could reach.
+///   global   $25.00  untouchable at current scale. It exists so a bug or an
+///                    attack cannot produce an open-ended bill overnight.
+export const LIMITS = {
+  perMinute: Number(process.env.RATE_PER_MINUTE || 10),
+  perHour: Number(process.env.RATE_PER_HOUR || 60),
+  perDay: Number(process.env.RATE_PER_DAY || 100),
+  daySpendUSD: Number(process.env.DAY_SPEND_CAP_USD || 1.0),
+  globalDaySpendUSD: Number(process.env.GLOBAL_DAY_SPEND_CAP_USD || 25.0)
+};
+
+/// List pricing, so the cost of a finished call can be recorded.
+const PRICING = {
+  'claude-sonnet-5': { input: 2.0, output: 10.0 },
+  'claude-haiku-4-5': { input: 1.0, output: 5.0 }
+};
+
+/// What a completed call cost, from the tokens Anthropic reported.
+///
+/// An unknown model is priced at the dearest rate rather than free: a model the
+/// allow-list somehow let through should cost more than nothing.
+export function costOfUsage(model, usage) {
+  const rate = PRICING[model] || { input: 2.0, output: 10.0 };
+  const input = Number(usage?.input_tokens || 0);
+  const output = Number(usage?.output_tokens || 0);
+  return (input / 1_000_000) * rate.input + (output / 1_000_000) * rate.output;
+}
+
+/// Turns a gate refusal into something the app can act on differently.
+///
+/// The distinction matters: waiting a minute fixes `minute`, and does nothing
+/// at all for `day` or `spend`. Telling somebody to try again shortly when they
+/// cannot is worse than telling them nothing.
+export function refusal(reason) {
+  switch (reason) {
+    case 'minute':
+    case 'hour':
+      return { status: 429, type: AgniError.rateLimited,
+               message: 'Agni is catching up. Try again in a moment, or log this meal by hand.' };
+    case 'day':
+      return { status: 429, type: AgniError.usageLimitReached,
+               message: "That is today's limit for photo analysis. You can still log meals by hand." };
+    case 'spend':
+      return { status: 429, type: AgniError.usageLimitReached,
+               message: "That is today's limit for photo analysis. You can still log meals by hand." };
+    case 'global_spend':
+      return { status: 503, type: AgniError.serviceUnavailable,
+               message: 'Photo analysis is paused for now. You can still log meals by hand.' };
+    case 'replay':
+    case 'unknown_key':
+      return { status: 401, type: AgniError.temporaryVerificationFailure,
+               message: 'This device could not be verified.' };
+    default:
+      return { status: 503, type: AgniError.serviceUnavailable,
+               message: 'Photo analysis is unavailable right now. You can still log meals by hand.' };
+  }
+}
+
 export function complimentaryLimit() {
   return Number(process.env.FREE_AI_ANALYSES || 3);
 }
