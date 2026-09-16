@@ -12,8 +12,23 @@
 -- It creates and deletes its own key. It touches nothing else, and it restores
 -- the global counter it borrows.
 
+-- A TABLE, NOT A NOTICE.
+--
+-- The first version of this signalled success with `raise notice`, which the
+-- Supabase SQL editor does not display: a complete pass and a block that did
+-- nothing at all both read as "Success. No rows returned". A test whose pass
+-- looks identical to its absence is not a test.
+--
+-- Now the block records its verdict in a temp table as its last act, and the
+-- select at the bottom shows it. If any check raises, the insert never happens
+-- and you get NO ROW, which is unmistakably different from one row saying it
+-- passed.
+drop table if exists agni_gate_test_result;
+create temp table agni_gate_test_result (result text, checks_run integer, at timestamptz);
+
 do $$
 declare
+  checks     integer := 0;
   k          text := 'TEST-GATE-KEY-DO-NOT-USE';
   r          record;
   n          bigint := 0;
@@ -39,6 +54,8 @@ begin
     raise exception 'a repeated counter must be refused as replay, got % %', r.allowed, r.reason;
   end if;
 
+  checks := checks + 1;
+
   -- 2. THE COUNTER ADVANCES EVEN WHEN A REQUEST IS REFUSED. A refused request
   --    still presented a fresh assertion; letting its counter be reused would
   --    reopen the replay window the refusal just closed.
@@ -55,6 +72,8 @@ begin
     raise exception 'a minute refusal must carry a sane retry_after, got %', r.retry_after;
   end if;
 
+  checks := checks + 1;
+
   -- 3. WINDOW ROLLOVER. A minute that has passed starts again.
   update agni_attest_keys
      set minute_count = 10, minute_start = now() - interval '61 seconds' where key_id = k;
@@ -64,6 +83,8 @@ begin
   if (select minute_count from agni_attest_keys where key_id = k) <> 1 then
     raise exception 'a rolled minute must restart the count';
   end if;
+
+  checks := checks + 1;
 
   -- 4. HOUR and DAY are enforced independently of the minute.
   update agni_attest_keys set hour_count = 60, hour_start = now() where key_id = k;
@@ -75,6 +96,8 @@ begin
   n := 5;
   select * into r from agni_attest_gate(k, n, 0, 10, 60, 100, 1.0, 25.0);
   if r.allowed or r.reason <> 'day' then raise exception 'day limit, got %', r.reason; end if;
+
+  checks := checks + 1;
 
   -- 5. SPEND. The previous call's real cost is added, and the cap bites after
   --    it crosses.
@@ -88,6 +111,8 @@ begin
     raise exception 'the previous cost must be recorded even when refused';
   end if;
 
+  checks := checks + 1;
+
   -- 6. A DAY THAT HAS ROLLED clears the spend as well as the counts.
   update agni_attest_keys
      set day_start = now() - interval '25 hours', day_spend_usd = 5.0 where key_id = k;
@@ -98,6 +123,8 @@ begin
     raise exception 'a new day must reset spend';
   end if;
 
+  checks := checks + 1;
+
   -- 7. THE GLOBAL CEILING stops everyone, and reads differently from a personal
   --    limit because it is not the person's fault.
   update agni_service set day_spend_usd = 25.0, day_start = now() where id = 1;
@@ -107,6 +134,8 @@ begin
   if r.allowed or r.reason <> 'global_spend' then
     raise exception 'global ceiling, got %', r.reason;
   end if;
+
+  checks := checks + 1;
 
   -- 8. UNLIMITED bypasses every limit, but spend is still recorded so the
   --    global ceiling still sees it.
@@ -123,6 +152,8 @@ begin
     raise exception 'an unlimited key must still contribute to the global ceiling';
   end if;
 
+  checks := checks + 1;
+
   -- 9. AN UNKNOWN KEY is refused, not created.
   select * into r from agni_attest_gate('NO-SUCH-KEY-AT-ALL', 1, 0, 10, 60, 100, 1.0, 25.0);
   if r.allowed or r.reason <> 'unknown_key' then
@@ -132,8 +163,19 @@ begin
   delete from agni_attest_keys where key_id = k;
   update agni_service set day_spend_usd = saved_spend, day_start = saved_start where id = 1;
 
-  raise notice 'ALL GATE TESTS PASSED';
+  checks := checks + 1;
+
+  insert into agni_gate_test_result
+  values ('ALL GATE TESTS PASSED', checks, now());
 end $$;
+
+-- WHAT YOU SHOULD SEE. One row:
+--
+--   result                  | checks_run | at
+--   ALL GATE TESTS PASSED   | 9          | 2026-...
+--
+-- No row, or a red error naming the check that broke, means it did not pass.
+select * from agni_gate_test_result;
 
 -- CONCURRENCY, which the script above cannot show on its own.
 --
