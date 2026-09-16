@@ -28,7 +28,7 @@ create or replace function agni_beta_claim(
   p_name  text,
   p_ip    text,
   p_cap   int
-) returns table (status text, taken int) language plpgsql as $$
+) returns table (status text, taken int) language plpgsql security definer as $$
 declare
   v_email text := lower(btrim(p_email));
   v_taken int;
@@ -66,11 +66,19 @@ $$;
 -- with invited = false is a real signal: that person gave their address and
 -- never got an invitation. Those are the ones to chase by hand.
 create or replace function agni_beta_invited(p_email text, p_tester_id text)
-returns void language sql as $$
+returns void language sql security definer as $$
   update agni_beta_signups
      set invited = true, tester_id = p_tester_id
    where email = lower(btrim(p_email));
 $$;
 
--- Nobody but the service role touches this table.
+-- Nobody but the service role touches this table, and the functions above are
+-- security definer so they run as the owner rather than as the caller.
+--
+-- THE ONE THAT BIT: without security definer these ran as service_role, which
+-- has no privileges on a newly created table, and every signup came back as
+-- "permission denied for table agni_beta_signups". The SQL editor did not catch
+-- it because the editor runs as the owner, so the test passed while the real
+-- path was broken. Every other function in this project is security definer
+-- for the same reason.
 alter table agni_beta_signups enable row level security;
