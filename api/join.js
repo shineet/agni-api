@@ -40,22 +40,22 @@ export default async function handler(req, res) {
   // a bot walked the form, and the quietest possible answer is to accept it
   // and do nothing, so the bot has no signal to adapt to.
   if (String(body.company || '').trim()) {
-    return json(res, 200, { ok: true, status: 'accepted' });
+    return json(res, 200, { ok: true, status: 'accepted', title: 'Thank you', message: 'You are on the list.' });
   }
 
   if (!LOOKS_LIKE_EMAIL.test(email) || email.length > 254) {
-    return json(res, 400, { ok: false, status: 'bad_email',
+    return json(res, 400, { ok: false, status: 'bad_email', title: 'Check that address',
       message: 'That does not look like an email address.' });
   }
   if (name.length > 80) {
-    return json(res, 400, { ok: false, status: 'bad_name', message: 'That name is too long.' });
+    return json(res, 400, { ok: false, status: 'bad_name', title: 'Check that name', message: 'That name is too long.' });
   }
 
   const cap = Number(process.env.BETA_CAP || CAP_DEFAULT);
   const groupId = process.env.ASC_BETA_GROUP_ID;
   if (!groupId) {
     report('beta signup', new Error('ASC_BETA_GROUP_ID is not set'));
-    return json(res, 503, { ok: false, status: 'unavailable',
+    return json(res, 503, { ok: false, status: 'unavailable', title: 'Not open yet',
       message: 'Signups are not switched on yet. Try again shortly.' });
   }
 
@@ -67,23 +67,23 @@ export default async function handler(req, res) {
     claim = Array.isArray(rows) ? rows[0] : rows;
   } catch (error) {
     report('beta claim', error);
-    return json(res, 503, { ok: false, status: 'unavailable',
+    return json(res, 503, { ok: false, status: 'unavailable', title: 'Try again shortly',
       message: 'Could not reach the signup list. Try again shortly.' });
   }
 
   const status = claim?.status;
 
   if (status === 'full') {
-    return json(res, 200, { ok: false, status: 'full',
+    return json(res, 200, { ok: false, status: 'full', title: 'The beta is full',
       message: 'The beta is full. All the places have gone.' });
   }
   if (status === 'slow_down') {
-    return json(res, 429, { ok: false, status: 'slow_down',
+    return json(res, 429, { ok: false, status: 'slow_down', title: 'Slow down a moment',
       message: 'That is a few signups from here already. Try again in an hour.' });
   }
   if (status === 'already') {
-    return json(res, 200, { ok: true, status: 'already',
-      message: 'You are already on the list. Check your email for the TestFlight invitation.' });
+    return json(res, 200, { ok: true, status: 'already', title: 'You are already in',
+      message: 'That address is already on the list. Check your email for the TestFlight invitation.' });
   }
 
   // The address is recorded before Apple is called, on purpose. If the invite
@@ -93,11 +93,21 @@ export default async function handler(req, res) {
   try {
     const result = await inviteTester({ email, name, groupId });
     await supabaseRPC('agni_beta_invited', { p_email: email, p_tester_id: result.id || null });
-    return json(res, 200, { ok: true, status: 'invited',
-      message: 'Invitation sent. Check your email, it comes from TestFlight.' });
+
+    // Apple sends nothing for an address that is ALREADY a tester, so saying
+    // "check your email" would leave that person waiting for a message that is
+    // never coming. They do not need an invitation: they need telling that the
+    // app is already sitting in TestFlight on their phone.
+    if (result.already) {
+      return json(res, 200, { ok: true, status: 'already_tester', title: 'You already have it',
+        message: 'That address is already a TestFlight tester for Agni. Open TestFlight on your iPhone and Agni is there, no new invitation needed.' });
+    }
+
+    return json(res, 200, { ok: true, status: 'invited', title: 'Check your email',
+      message: 'Invitation sent. It comes from TestFlight and usually arrives within a minute.' });
   } catch (error) {
     report('beta invite', error);
-    return json(res, 200, { ok: true, status: 'pending',
+    return json(res, 200, { ok: true, status: 'pending', title: 'You are on the list',
       message: 'You are on the list. Your invitation is being sent by hand, so give it a day.' });
   }
 }

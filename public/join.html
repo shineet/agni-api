@@ -121,12 +121,16 @@
     }).then(function (r) {
       return r.json().catch(function () { return {}; });
     }).then(function (data) {
+      // The server names its own outcome. The page guessing a heading from the
+      // status was how "check your email" ended up on top of an answer that
+      // sends no email.
       var message = data.message || 'Something went wrong. Try again in a moment.';
+      var title = data.title || (data.ok ? 'Done' : 'Not quite');
       if (data.ok) {
-        say('good', data.status === 'already' ? 'You are already in' : 'Check your email', message);
+        say('good', title, message);
         form.style.display = 'none';
       } else {
-        say('bad', data.status === 'full' ? 'The beta is full' : 'Not quite', message);
+        say('bad', title, message);
         go.disabled = false;
         go.textContent = 'Send me the invitation';
       }
