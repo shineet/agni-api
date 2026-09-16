@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 /// The app signs SHA256(challenge) || SHA256(body). Binding the body means an
 /// assertion captured from one request cannot be replayed onto another, and the
 /// counter means it cannot be replayed onto the same one either.
-async function attested(req) {
+async function attested(req, rawBody) {
   const keyId = req.headers['x-agni-key-id'];
   const assertion = req.headers['x-agni-assertion'];
   const challenge = req.headers['x-agni-challenge'];
@@ -26,9 +26,18 @@ async function attested(req) {
   if (!record) throw new Error('key is not registered');
   if (record.revoked) throw new Error('key is revoked');
 
-  const bodyHash = createHash('sha256')
-    .update(JSON.stringify(req.body?.request ?? {}))
-    .digest();
+  // THE RAW BYTES AS RECEIVED, never a re-serialisation.
+  //
+  // This hashed `JSON.stringify(req.body.request)`. The app hand-assembles its
+  // JSON and interpolates the response schema RAW, so what it signs carries
+  // 4,667 characters of pretty-printed newlines and indentation that a parse
+  // and re-stringify silently strips. The two hashes could never agree, and
+  // every assertion failed with "signature does not verify".
+  //
+  // Hashing what actually arrived removes the class of bug entirely: the two
+  // sides no longer have to agree on how to format JSON, which is not
+  // something two languages can be relied upon to do.
+  const bodyHash = createHash('sha256').update(rawBody).digest();
   const clientData = Buffer.concat([Buffer.from(challenge, 'base64'), bodyHash]);
 
   const { counter } = verifyAssertion({
@@ -51,6 +60,16 @@ async function attested(req) {
 /// key. That is the whole design: the system prompt and the JSON schema live in
 /// one place, in the app, so a prompt change ships with the app and cannot
 /// drift out of step with a copy on the server.
+/// Vercel parses JSON bodies by default, and a parsed body cannot be hashed:
+/// re-serialising it produces different bytes from the ones that were signed.
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return json(res, 405, { error: { type: 'method_not_allowed', message: 'POST only.' } });
@@ -63,12 +82,21 @@ export default async function handler(req, res) {
                 'Photo analysis is paused. You can still log food by hand.');
   }
 
+  let rawBody;
+  let parsed;
+  try {
+    rawBody = await readRawBody(req);
+    parsed = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    return fail(res, 400, AgniError.invalidRequest, 'Body was not readable JSON.');
+  }
+
   // ATTESTED FIRST, ALWAYS. A verified device is the production path; the
   // shared token is only a bridge for builds already on testers' phones, and
   // `legacyTokenEnabled()` turns it off server-side.
   let identity = null;
   try {
-    identity = await attested(req);
+    identity = await attested(req, rawBody);
   } catch (error) {
     report('attestation', error);
     return fail(res, 401, AgniError.temporaryVerificationFailure,
@@ -82,7 +110,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const { installId, request } = req.body || {};
+  const { installId, request } = parsed || {};
 
   // The metering subject: an attested key where there is one, and the old
   // client-supplied id only on the legacy path, which is going away. A caller
