@@ -65,8 +65,11 @@
   <p class="lede">Twenty places. Put your email in and TestFlight will send you the invitation straight away.</p>
 
   <form id="f" novalidate>
-    <label for="name">Your name</label>
-    <input id="name" name="name" type="text" autocomplete="name" placeholder="Nidhi Sharma" maxlength="80">
+    <label for="first">First name</label>
+    <input id="first" name="first" type="text" autocomplete="given-name" placeholder="Nidhi" maxlength="40" required>
+
+    <label for="last">Last name</label>
+    <input id="last" name="last" type="text" autocomplete="family-name" placeholder="Sharma" maxlength="40" required>
 
     <label for="email">Email for the invitation</label>
     <input id="email" name="email" type="email" autocomplete="email" inputmode="email"
@@ -105,6 +108,12 @@
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     var email = document.getElementById('email').value.trim();
+    var first = document.getElementById('first').value.trim();
+    var last = document.getElementById('last').value.trim();
+    if (!first || !last) {
+      say('bad', 'One thing missing', 'TestFlight shows both names, so it needs each one.');
+      return;
+    }
     if (!email) { say('bad', 'One thing missing', 'Put your email address in first.'); return; }
 
     go.disabled = true;
@@ -114,7 +123,8 @@
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        name: document.getElementById('name').value,
+        first: document.getElementById('first').value,
+        last: document.getElementById('last').value,
         email: email,
         company: document.getElementById('company').value
       })

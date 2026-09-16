@@ -50,8 +50,7 @@ function token() {
 ///
 /// Returns { id } on success, or { already: true } when Apple says the address
 /// is already a tester. That is not a failure worth showing anybody.
-export async function inviteTester({ email, name, groupId }) {
-  const [first, ...rest] = (name || '').trim().split(/\s+/);
+export async function inviteTester({ email, first, last, groupId }) {
 
   const response = await fetch(`${API}/betaTesters`, {
     method: 'POST',
@@ -66,9 +65,10 @@ export async function inviteTester({ email, name, groupId }) {
           email,
           // Apple accepts a tester with no name, but then App Store Connect
           // shows the same "Anonymous" that the public link would have, which
-          // defeats the point of asking.
+          // defeats the point of asking. Both are collected as their own field
+          // now: splitting one on a space turned "Nadia" into "Nadia Tester".
           firstName: first || 'Beta',
-          lastName: rest.join(' ') || 'Tester'
+          lastName: last || 'Tester'
         },
         relationships: {
           betaGroups: { data: [{ type: 'betaGroups', id: groupId }] }

@@ -34,7 +34,12 @@ export default async function handler(req, res) {
 
   const body = typeof req.body === 'string' ? safeParse(req.body) : (req.body || {});
   const email = String(body.email || '').trim().toLowerCase();
-  const name = String(body.name || '').trim();
+  // Asked as two fields, because Apple stores two. Splitting one field on a
+  // space guessed wrong for anybody who types a single word: "Nadia" became
+  // "Nadia Tester" in App Store Connect, which reads like a placeholder.
+  const first = String(body.first || '').trim();
+  const last = String(body.last || '').trim();
+  const name = [first, last].filter(Boolean).join(' ');
 
   // A field the page hides and a person therefore never fills in. Filled means
   // a bot walked the form, and the quietest possible answer is to accept it
@@ -47,8 +52,13 @@ export default async function handler(req, res) {
     return json(res, 400, { ok: false, status: 'bad_email', title: 'Check that address',
       message: 'That does not look like an email address.' });
   }
-  if (name.length > 80) {
-    return json(res, 400, { ok: false, status: 'bad_name', title: 'Check that name', message: 'That name is too long.' });
+  if (!first || !last) {
+    return json(res, 400, { ok: false, status: 'bad_name', title: 'One thing missing',
+      message: 'TestFlight shows both names, so it needs each one.' });
+  }
+  if (first.length > 40 || last.length > 40) {
+    return json(res, 400, { ok: false, status: 'bad_name', title: 'Check that name',
+      message: 'That name is too long.' });
   }
 
   const cap = Number(process.env.BETA_CAP || CAP_DEFAULT);
@@ -91,7 +101,7 @@ export default async function handler(req, res) {
   // they can be chased by hand. Inviting first and recording after would throw
   // away exactly the addresses that need following up.
   try {
-    const result = await inviteTester({ email, name, groupId });
+    const result = await inviteTester({ email, first, last, groupId });
     await supabaseRPC('agni_beta_invited', { p_email: email, p_tester_id: result.id || null });
 
     // Apple sends nothing for an address that is ALREADY a tester, so saying
