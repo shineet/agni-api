@@ -22,5 +22,11 @@
       "maxDuration": 15
     }
   },
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/share.html"
+    }
+  ]
 }
