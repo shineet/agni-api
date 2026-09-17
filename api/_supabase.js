@@ -48,3 +48,30 @@ export async function supabaseRPC(fn, args) {
   return text ? JSON.parse(text) : null;
 }
 
+
+/// A plain table read, for the admin views.
+///
+/// Everything the APP does goes through `supabaseRPC`, because every app-facing
+/// call is a security definer function and that is the right shape for a call
+/// arriving from a phone. An admin view is not that: it is a select the service
+/// role is entitled to make directly, and adding a Postgres function for every
+/// question anybody asks would mean a migration each time.
+///
+/// The service role bypasses row level security, which is why this works
+/// against a table whose RLS is on with no policies. That is also exactly why
+/// this helper must never be reachable without the admin token.
+export async function supabaseSelect(table, query) {
+  const base = supabaseBase();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base) throw new Error('SUPABASE_URL is not set on this deployment.');
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set on this deployment.');
+
+  const headers = { apikey: key };
+  if (key.startsWith('eyJ')) headers.authorization = `Bearer ${key}`;
+
+  const response = await fetch(`${base}/rest/v1/${table}?${query}`, { headers });
+  if (!response.ok) {
+    throw new Error(`Supabase select ${table} failed: ${response.status} ${await response.text()}`);
+  }
+  return response.json();
+}

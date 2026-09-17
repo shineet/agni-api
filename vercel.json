@@ -20,6 +20,9 @@
     },
     "api/join.js": {
       "maxDuration": 15
+    },
+    "api/beta-signups.js": {
+      "maxDuration": 10
     }
   },
   "cleanUrls": true,
