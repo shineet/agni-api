@@ -1,14 +1,17 @@
 import crypto from 'node:crypto';
 import { json, report } from './_lib.js';
 import { supabaseRPC } from './_supabase.js';
+import { listTesters } from './_asc.js';
 
-/// Who signed up, and whether their invitation actually reached Apple.
+/// The whole beta on one page: who signed up, whether their invitation landed,
+/// and what is actually on their phone.
 ///
-/// App Store Connect answers a different question. It knows who is a TESTER:
-/// name, state, and the build on their device. It does not know who gave their
-/// address and got nothing back, because a signup whose invite failed never
-/// becomes a tester at all. That person exists in exactly one place, this
-/// table, as a row with invited = false, and they are the ones worth chasing.
+/// Those are three different systems and each one alone lies by omission. The
+/// signups table is the ONLY place somebody whose invite failed exists, because
+/// a failed invite never becomes a tester. App Store Connect is the only place
+/// an install exists. And a tester quietly sitting on an old build is invisible
+/// in both unless you go looking -- which is how six people once stayed on
+/// build 130 while six builds went past them.
 ///
 /// Open it in a browser and it asks for a password. There is deliberately no
 /// token in the URL: a link in a browser history, a screenshot, or a message to
@@ -45,6 +48,48 @@ export function presentedToken(req) {
   return null;
 }
 
+/// "1.0 (138)" -> 138. The build number is what moves; the marketing version
+/// sits still for months, so comparing the whole string would call everybody
+/// current forever.
+export function buildNumber(text) {
+  const match = /\((\d+)\)/.exec(String(text || ''));
+  return match ? Number(match[1]) : null;
+}
+
+/// Joins the two systems on the email address, lowercased on both sides because
+/// Postgres stores it lowered and Apple does not promise to.
+///
+/// A signup with no matching tester is NOT an error to hide: it is either an
+/// invitation that failed, or one Apple accepted and then lost. Either way the
+/// row stays visible and says so.
+export function merge(signups, testers) {
+  const seen = new Set();
+  const rows = signups.map(s => {
+    const key = String(s.email || '').toLowerCase();
+    seen.add(key);
+    const tester = testers.byEmail.get(key) || null;
+    return {
+      name: s.name,
+      email: s.email,
+      created_at: s.created_at,
+      invited: s.invited,
+      state: tester?.state || null,
+      build: tester?.build || null
+    };
+  });
+
+  // Everybody Apple knows about who did not come through the form: the close
+  // testers, Shine himself, and the anonymous public-link joiners. Without
+  // them the page would quietly under-report the beta.
+  const others = [];
+  for (const [email, t] of testers.byEmail) {
+    if (!seen.has(email)) others.push({ ...t, email });
+  }
+  for (const t of testers.anonymous) others.push({ ...t, email: null });
+
+  return { rows, others };
+}
+
 function escape(text) {
   return String(text ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,47 +104,92 @@ function when(iso) {
   });
 }
 
-function page(rows, cap) {
-  const invited = rows.filter(r => r.invited).length;
-  const stuck = rows.filter(r => !r.invited);
-  const left = Math.max(0, cap - rows.length);
+/// One word for what is true of this person, and the class that colours it.
+/// Ordered worst first, because the first true thing is the one to act on.
+function verdict(row, newest) {
+  if (!row.invited) return { label: 'invite failed', cls: 'bad' };
+  if (!row.state) return { label: 'not a tester', cls: 'bad' };
+  if (row.state !== 'INSTALLED') return { label: 'never opened the email', cls: 'warn' };
+  const n = buildNumber(row.build);
+  if (newest && n && n < newest) return { label: `behind, on ${n}`, cls: 'warn' };
+  return { label: 'installed', cls: 'ok' };
+}
 
-  const body = rows.map(r => `
-      <tr class="${r.invited ? '' : 'stuck'}">
-        <td>${escape(when(r.created_at))}</td>
+const STYLE = `
+  :root {
+    color-scheme: light dark;
+    --line: #8883; --bad: #c0392b; --warn: #b9770e; --ok: #1e8449; --muted: #8889;
+  }
+  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 20px 20px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 28px 0 6px; opacity: .7; font-weight: 600; }
+  p.count { margin: 0 0 18px; }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; font-size: 13px; opacity: .6; }
+  td.time { white-space: nowrap; opacity: .65; }
+  td.verdict { white-space: nowrap; font-weight: 600; }
+  .bad { color: var(--bad); } .warn { color: var(--warn); } .ok { color: var(--ok); }
+  a { color: inherit; }
+  .note { margin-top: 16px; font-size: 13px; opacity: .75; max-width: 46em; }
+  .stale { color: var(--muted); font-size: 13px; }
+`;
+
+function page({ rows, others, cap, newest, ascError }) {
+  const invited = rows.filter(r => r.invited).length;
+  const installed = rows.filter(r => r.state === 'INSTALLED').length;
+  const left = Math.max(0, cap - rows.length);
+  const needsYou = rows.filter(r => verdict(r, newest).cls !== 'ok');
+
+  const body = rows.map(r => {
+    const v = verdict(r, newest);
+    return `
+      <tr>
+        <td class="time">${escape(when(r.created_at))}</td>
         <td>${escape(r.name || '(no name)')}</td>
         <td><a href="mailto:${escape(r.email)}">${escape(r.email)}</a></td>
-        <td>${r.invited ? 'invited' : 'NOT INVITED'}</td>
+        <td class="verdict ${v.cls}">${escape(v.label)}</td>
+      </tr>`;
+  }).join('');
+
+  const rest = others.map(t => `
+      <tr>
+        <td class="time">${escape(t.inviteType === 'PUBLIC_LINK' ? 'public link' : 'added by hand')}</td>
+        <td>${escape(t.name || 'Anonymous')}</td>
+        <td>${t.email ? `<a href="mailto:${escape(t.email)}">${escape(t.email)}</a>`
+                      : '<span class="stale">no address, cannot be contacted</span>'}</td>
+        <td class="verdict ${t.state === 'INSTALLED' && buildNumber(t.build) === newest ? 'ok' : 'warn'}">${
+          escape(t.state === 'INSTALLED' ? `on ${buildNumber(t.build) ?? '?'}` : (t.state || '').toLowerCase())}</td>
       </tr>`).join('');
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Agni beta signups</title>
-<style>
-  :root { color-scheme: light dark; --line: #8883; --stuck: #c0392b; }
-  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  p.count { margin: 0 0 18px; opacity: .75; }
-  .wrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 520px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  th { font-weight: 600; font-size: 13px; opacity: .6; }
-  td:first-child { white-space: nowrap; opacity: .7; }
-  tr.stuck td { color: var(--stuck); font-weight: 600; }
-  .note { margin-top: 18px; font-size: 13px; opacity: .75; max-width: 46em; }
-</style></head><body>
-<h1>Agni beta signups</h1>
-<p class="count">${rows.length} signed up · ${invited} invited · ${stuck.length} not invited · cap ${cap}, ${left} left</p>
+<title>Agni beta</title>
+<style>${STYLE}</style></head><body>
+<h1>Agni beta</h1>
+<p class="count">${rows.length} signed up · ${invited} invited · ${installed} installed${
+  newest ? ` · newest build ${newest}` : ''} · cap ${cap}, ${left} left
+${needsYou.length ? `<br><span class="warn"><strong>${needsYou.length} need${
+  needsYou.length === 1 ? 's' : ''} you.</strong></span>` : ''}</p>
+
+${ascError ? `<p class="note bad">App Store Connect could not be reached, so the TestFlight column is
+  blank. The signup list below is still correct.</p>` : ''}
+
 <div class="wrap"><table>
-  <tr><th>When</th><th>Name</th><th>Email</th><th>Invite</th></tr>${body}
+  <tr><th>Signed up</th><th>Name</th><th>Email</th><th>TestFlight</th></tr>${body}
 </table></div>
-${stuck.length ? `<p class="note">The rows in red gave their address and Apple never accepted the
-  invitation. They are invisible in App Store Connect, so nothing else will remind you they exist.
-  Inviting them by hand from the group's Testers + button is the fix.</p>` : ''}
-<p class="note">Signups only. Whether somebody actually installed the build is a different question,
-  and App Store Connect answers that one: <code>asc.py testers agni</code>.</p>
+
+${others.length ? `<h2>Testers who did not come through the form</h2>
+<div class="wrap"><table>
+  <tr><th>How</th><th>Name</th><th>Email</th><th>TestFlight</th></tr>${rest}
+</table></div>` : ''}
+
+<p class="note">"Behind" means installed, but on an older build than the newest anybody has.
+  A public-link tester has no name and no address by design, which is why the signup form exists:
+  there is no way to ask an anonymous tester what the dish in their photograph actually was.</p>
 </body></html>`;
 }
 
@@ -122,18 +212,33 @@ export default async function handler(req, res) {
     return json(res, 401, { ok: false, message: 'Not authorised.' });
   }
 
-  let rows;
+  let signups;
   try {
-    // A security definer function, not a select on the table. The service
-    // role has no SELECT privilege here: RLS bypass is not a grant, and a
-    // direct read answers 42501, "permission denied for table".
+    // A security definer function, not a select on the table. The service role
+    // has no SELECT privilege here: RLS bypass is not a grant, and a direct
+    // read answers 42501, "permission denied for table".
     const result = await supabaseRPC('agni_beta_list', {});
-    rows = Array.isArray(result) ? result : [];
+    signups = Array.isArray(result) ? result : [];
   } catch (error) {
     report('beta signups', error);
     return json(res, 503, { ok: false, message: 'Could not read the signup list.' });
   }
 
+  // App Store Connect is the SECOND source and must never be able to take the
+  // page down. If Apple is slow or the key is rejected, the signup list is
+  // still the answer to most of the question.
+  let testers = { byEmail: new Map(), anonymous: [] };
+  let ascError = null;
+  try {
+    testers = await listTesters();
+  } catch (error) {
+    report('beta testers', error);
+    ascError = error;
+  }
+
+  const { rows, others } = merge(signups, testers);
+  const newest = Math.max(0, ...[...rows, ...others]
+    .map(r => buildNumber(r.build)).filter(Boolean)) || null;
   const cap = Number(process.env.BETA_CAP || CAP_DEFAULT);
 
   // Never stored by a browser or an intermediary: it is a list of real people's
@@ -142,14 +247,18 @@ export default async function handler(req, res) {
 
   if (String(req.headers.accept || '').includes('text/html')) {
     res.status(200).setHeader('content-type', 'text/html; charset=utf-8');
-    return res.send(page(rows, cap));
+    return res.send(page({ rows, others, cap, newest, ascError }));
   }
 
   return json(res, 200, {
     ok: true,
     cap,
+    newest,
     total: rows.length,
     invited: rows.filter(r => r.invited).length,
-    signups: rows
+    installed: rows.filter(r => r.state === 'INSTALLED').length,
+    ascReachable: !ascError,
+    signups: rows,
+    others
   });
 }

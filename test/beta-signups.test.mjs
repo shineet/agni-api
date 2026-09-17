@@ -81,3 +81,62 @@ test('a correct token with no database reachable fails closed, not open', async 
   assert.equal(res.statusCode, 503);
   assert.doesNotMatch(String(res.body), /correct-horse/);
 });
+
+/// The join between the two systems. This is where a wrong answer would be
+/// quiet rather than loud: a mismatched key does not throw, it just reports
+/// everybody as "not a tester".
+
+import { merge, buildNumber } from '../api/beta-signups.js';
+
+const testers = (byEmail = {}, anonymous = []) =>
+  ({ byEmail: new Map(Object.entries(byEmail)), anonymous });
+
+test('buildNumber reads the build, not the marketing version', () => {
+  assert.equal(buildNumber('1.0 (138)'), 138);
+  assert.equal(buildNumber('2.3.1 (7)'), 7);
+  assert.equal(buildNumber(null), null);
+  assert.equal(buildNumber('1.0'), null);
+});
+
+test('a signup is matched to its tester regardless of case', () => {
+  const { rows } = merge(
+    [{ name: 'Indu B', email: 'indu@example.com', created_at: '2026-09-16T20:47:00Z', invited: true }],
+    testers({ 'indu@example.com': { state: 'INSTALLED', build: '1.0 (138)' } })
+  );
+  assert.equal(rows[0].state, 'INSTALLED');
+
+  // Apple does not promise to hand the address back lowercased, and Postgres
+  // stores it lowered. Keying on the raw string would silently unmatch people.
+  const mixed = merge(
+    [{ name: 'Indu B', email: 'Indu@Example.com', created_at: '2026-09-16T20:47:00Z', invited: true }],
+    testers({ 'indu@example.com': { state: 'INSTALLED', build: '1.0 (138)' } })
+  );
+  assert.equal(mixed.rows[0].state, 'INSTALLED');
+});
+
+test('a signup with no tester stays visible and says so', () => {
+  const { rows } = merge(
+    [{ name: 'Lost Person', email: 'lost@example.com', created_at: '2026-09-16T20:47:00Z', invited: false }],
+    testers()
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].state, null);
+  assert.equal(rows[0].invited, false);
+});
+
+test('testers who never used the form are listed separately, not dropped', () => {
+  const { rows, others } = merge(
+    [{ name: 'Indu B', email: 'indu@example.com', created_at: '2026-09-16T20:47:00Z', invited: true }],
+    testers(
+      { 'indu@example.com': { state: 'INSTALLED', build: '1.0 (138)' },
+        'kavitha@example.com': { state: 'INSTALLED', build: '1.0 (138)', name: 'Kavitha Nair' } },
+      [{ state: 'INSTALLED', build: '1.0 (101)', inviteType: 'PUBLIC_LINK', name: 'Anonymous' }]
+    )
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(others.length, 2);
+  // The anonymous one is the whole reason this section exists: they hold a
+  // build and there is no way to reach them.
+  const anon = others.find(o => o.email === null);
+  assert.equal(anon.build, '1.0 (101)');
+});

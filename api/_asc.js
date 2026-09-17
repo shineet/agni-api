@@ -92,3 +92,54 @@ export async function inviteTester({ email, first, last, groupId }) {
 
   throw new Error(`App Store Connect ${response.status}: ${text.slice(0, 400)}`);
 }
+
+/// Everyone Apple currently considers a tester, keyed by lowercased email.
+///
+/// This is the other half of the beta picture. The signups table knows who
+/// asked; only App Store Connect knows who actually installed, and which build
+/// they are on. A tester sitting quietly on an old build is invisible
+/// everywhere else, which is how six people once sat on build 130 while six
+/// builds went past them.
+///
+/// PUBLIC_LINK testers have no email at all -- they are literally "Anonymous" --
+/// so they cannot be keyed. They are returned separately because they still
+/// count: they hold a build, and nobody can tell them anything.
+export async function listTesters() {
+  const groupId = process.env.ASC_BETA_GROUP_ID;
+  if (!groupId) throw new Error('ASC_BETA_GROUP_ID is not set on this deployment.');
+
+  const headers = { authorization: `Bearer ${token()}` };
+
+  // The app id comes from the group rather than a second environment variable.
+  // Two things that must agree are one thing that can silently disagree.
+  const appResponse = await fetch(`${API}/betaGroups/${groupId}/app`, { headers });
+  if (!appResponse.ok) {
+    throw new Error(`App Store Connect app lookup ${appResponse.status}`);
+  }
+  const appId = (await appResponse.json())?.data?.id;
+  if (!appId) throw new Error('App Store Connect returned no app for that group.');
+
+  // NOTE: /apps/{id}/betaTesters is FORBIDDEN for GET -- Apple allows only
+  // DELETE on that relationship. The filter form is the only way to list them.
+  const response = await fetch(
+    `${API}/betaTesters?filter[apps]=${appId}&limit=200`, { headers });
+  if (!response.ok) {
+    throw new Error(`App Store Connect testers ${response.status}`);
+  }
+
+  const byEmail = new Map();
+  const anonymous = [];
+  for (const tester of (await response.json())?.data || []) {
+    const a = tester.attributes || {};
+    const devices = a.appDevices || [];
+    const entry = {
+      state: a.state || 'UNKNOWN',
+      build: devices[0]?.appBuildVersion || null,
+      inviteType: a.inviteType || null,
+      name: `${a.firstName || ''} ${a.lastName || ''}`.trim()
+    };
+    if (a.email) byEmail.set(String(a.email).toLowerCase(), entry);
+    else anonymous.push(entry);
+  }
+  return { byEmail, anonymous };
+}
