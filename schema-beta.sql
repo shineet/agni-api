@@ -82,3 +82,30 @@ $$;
 -- path was broken. Every other function in this project is security definer
 -- for the same reason.
 alter table agni_beta_signups enable row level security;
+
+-- Reading the list back, for the admin view at /api/beta-signups.
+--
+-- This is a function rather than a direct REST select on the table, and the
+-- reason is worth writing down because I got it wrong once already: the service
+-- role does NOT have SELECT on a table created without an explicit grant. RLS
+-- and privileges are two different gates. Bypassing row level security, which
+-- the service role does, still leaves "permission denied for table" (42501) --
+-- the same error code that took down every signup on the day this table was
+-- born, arriving by a different route. Security definer runs as the owner and
+-- sidesteps both.
+--
+-- The column list is explicit and deliberately EXCLUDES ip. That column exists
+-- to rate limit and is never shown to anybody, and a select * here would have
+-- quietly put every signup's IP address on a web page.
+create or replace function agni_beta_list()
+returns table (
+  name       text,
+  email      text,
+  created_at timestamptz,
+  invited    boolean,
+  tester_id  text
+) language sql security definer as $$
+  select s.name, s.email, s.created_at, s.invited, s.tester_id
+    from agni_beta_signups s
+   order by s.created_at desc;
+$$;

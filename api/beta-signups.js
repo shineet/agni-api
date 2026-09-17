@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { json, report } from './_lib.js';
-import { supabaseSelect } from './_supabase.js';
+import { supabaseRPC } from './_supabase.js';
 
 /// Who signed up, and whether their invitation actually reached Apple.
 ///
@@ -124,8 +124,11 @@ export default async function handler(req, res) {
 
   let rows;
   try {
-    rows = await supabaseSelect('agni_beta_signups',
-      'select=name,email,created_at,invited,tester_id&order=created_at.desc');
+    // A security definer function, not a select on the table. The service
+    // role has no SELECT privilege here: RLS bypass is not a grant, and a
+    // direct read answers 42501, "permission denied for table".
+    const result = await supabaseRPC('agni_beta_list', {});
+    rows = Array.isArray(result) ? result : [];
   } catch (error) {
     report('beta signups', error);
     return json(res, 503, { ok: false, message: 'Could not read the signup list.' });
