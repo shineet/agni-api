@@ -1,4 +1,5 @@
-import { authorised, json, report, reportMiss } from './_lib.js';
+import { json, report, reportMiss } from './_lib.js';
+import { authenticate, recordAuth, MeterClass } from './_auth.js';
 
 /// What Agni did not know, from every phone.
 ///
@@ -9,8 +10,21 @@ import { authorised, json, report, reportMiss } from './_lib.js';
 ///
 ///   POST /api/misses { misses: [...] }   header x-agni-install
 export default async function handler(req, res) {
-  if (!authorised(req)) {
-    json(res, 401, { error: 'Unauthorized' });
+  // ATTESTATION FIRST, LEGACY STILL ACCEPTED. Backwards compatible by
+  // construction: the only change here is additional acceptance, so every
+  // client already in the field keeps working unchanged. Metered on the READ
+  // class, which has its own counters -- a dish search must never consume the
+  // ten-per-minute allowance that photo estimation depends on.
+  const auth = await authenticate(req, {
+    meterClass: MeterClass.read,
+    path: '/api/misses',
+    query: req.query || {},
+    rawBody: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '')
+  });
+  recordAuth('misses', auth, req);
+  if (!auth.ok) {
+    if (auth.retryAfter > 0) res.setHeader('retry-after', String(auth.retryAfter));
+    json(res, auth.status || 401, { error: 'Unauthorized' });
     return;
   }
   if (req.method !== 'POST') {

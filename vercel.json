@@ -23,6 +23,9 @@
     },
     "api/beta-signups.js": {
       "maxDuration": 10
+    },
+    "api/auth-telemetry.js": {
+      "maxDuration": 10
     }
   },
   "cleanUrls": true,
