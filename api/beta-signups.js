@@ -20,6 +20,32 @@ import { listTesters } from './_asc.js';
 
 const CAP_DEFAULT = 20;
 
+/// Failed attempts, per address, so a short password is not a short password to
+/// a script. Nothing here is stored: the map lives in one warm function
+/// instance and empties itself when that instance goes away.
+///
+/// HONEST ABOUT WHAT IT IS: several instances can be warm at once, so a
+/// determined attacker spread across them sees a fraction of this backoff. It
+/// is not a lockout and it is not meant to be one. What it does do is turn
+/// thousands of guesses a second into a handful, which is the difference
+/// between a guessable password and a guessed one. The page is also noindex and
+/// its URL is not linked from anywhere.
+const failures = new Map();
+const BACKOFF_STEP_MS = 250;
+const BACKOFF_MAX_MS = 4000;
+
+function clientIP(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length) return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+export function backoffFor(attempts) {
+  return Math.min(BACKOFF_MAX_MS, attempts * BACKOFF_STEP_MS);
+}
+
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 /// Compared byte for byte in constant time. A plain === on a secret leaks its
 /// length and its prefix to anyone patient enough to measure, and this one
 /// guards a list of real people's addresses.
@@ -204,13 +230,21 @@ export default async function handler(req, res) {
     return json(res, 503, { ok: false, message: 'This view is not switched on.' });
   }
 
+  const ip = clientIP(req);
   const given = presentedToken(req);
   if (!given || !sameSecret(given, expected)) {
+    // Counted BEFORE the wait, so the delay applies to this attempt too rather
+    // than only to the next one.
+    const attempts = (failures.get(ip) || 0) + 1;
+    failures.set(ip, attempts);
+    await pause(backoffFor(attempts));
+
     // The challenge is what makes a browser ask. Without it an unauthorised
     // visitor gets a bare 401 page and no way to supply anything.
     res.setHeader('www-authenticate', 'Basic realm="Agni beta", charset="UTF-8"');
     return json(res, 401, { ok: false, message: 'Not authorised.' });
   }
+  failures.delete(ip);
 
   let signups;
   try {

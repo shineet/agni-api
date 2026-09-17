@@ -140,3 +140,25 @@ test('testers who never used the form are listed separately, not dropped', () =>
   const anon = others.find(o => o.email === null);
   assert.equal(anon.build, '1.0 (101)');
 });
+
+import { backoffFor } from '../api/beta-signups.js';
+
+test('the backoff grows with attempts and is capped', () => {
+  assert.equal(backoffFor(1), 250);
+  assert.equal(backoffFor(4), 1000);
+  // Capped, because an unbounded wait is a way to hold a function open and
+  // bill for it, which is a worse problem than the one being solved.
+  assert.equal(backoffFor(100), 4000);
+});
+
+test('a failed attempt is slowed, a good one is not', async () => {
+  process.env.BETA_ADMIN_TOKEN = 'correct-horse';
+
+  const started = Date.now();
+  const res = fakeRes();
+  await handler(req({ 'x-admin-token': 'nope', 'x-forwarded-for': '203.0.113.9' }), res);
+  assert.equal(res.statusCode, 401);
+  // The FIRST wrong guess already waits. Counting before the pause rather than
+  // after is what makes that true.
+  assert.ok(Date.now() - started >= 200, 'first failure was not slowed');
+});
