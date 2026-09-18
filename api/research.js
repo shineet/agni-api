@@ -26,7 +26,8 @@ const SYSTEM = `You identify foods for a nutrition app.
 Answer ONLY with JSON in this exact shape:
 {"identity":{"kind":"generic|dish|brand|restaurant|unknown",
              "canonical_name":"","brand":"","restaurant":"",
-             "language":"","english_name":"","cuisine":""},
+             "language":"","english_name":"","cuisine":"",
+             "product_type":"","modifiers":[],"variant":""},
  "recipe":{"serving_grams":0,"servings":1,
            "ingredients":[{"name":"","grams":0}],
            "preparation":""},
@@ -44,6 +45,12 @@ Rules:
 - If the food is a packaged product or a restaurant item, set kind and the
   brand or restaurant, and leave recipe empty: a published panel is better than
   a guess at a recipe.
+- For a packaged or restaurant item also give product_type, which is what sort
+  of thing it is in ordinary words: "chocolate bar", "breakfast cereal", "steak
+  bake pastry", "margherita pizza". This is used to reject a different product
+  from the same company, so be specific about the FORM of the food.
+- Put anything that changes which product it is in modifiers: "diet", "zero",
+  "thin crust", "no cheese". Put a stated size in variant: "330ml", "grande".
 - If you do not recognise the food, set kind to "unknown" and certainty to
   "low". Saying you do not know is a correct answer.
 - Keep the original name in canonical_name when it is a real dish name in
@@ -81,7 +88,12 @@ function shape(parsed) {
       restaurant: String(identity.restaurant || '').trim().slice(0, 80) || null,
       language: String(identity.language || '').trim().slice(0, 16) || null,
       english_name: String(identity.english_name || '').trim().slice(0, 120) || null,
-      cuisine: String(identity.cuisine || '').trim().slice(0, 40) || null
+      cuisine: String(identity.cuisine || '').trim().slice(0, 40) || null,
+      product_type: String(identity.product_type || '').trim().slice(0, 60) || null,
+      modifiers: Array.isArray(identity.modifiers)
+        ? identity.modifiers.slice(0, 6).map(m => String(m).trim().slice(0, 30)).filter(Boolean)
+        : [],
+      variant: String(identity.variant || '').trim().slice(0, 30) || null
     },
     recipe: ingredients.length > 0 ? {
       serving_grams: Number.isFinite(servingGrams) && servingGrams > 0
