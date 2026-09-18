@@ -94,10 +94,16 @@ export default async function handler(req, res) {
   url.searchParams.set('api_key', key);
   url.searchParams.set('query', query);
   url.searchParams.set('pageSize', '5');
-  // Branded first is deliberate: the local extract already covers the survey
-  // and legacy tables well, so the value a live call adds is mostly the
-  // branded catalogue.
-  url.searchParams.set('dataType', 'Branded,SR Legacy,Foundation,Survey (FNDDS)');
+  // NO dataType FILTER, AND THAT IS DELIBERATE TWICE OVER.
+  //
+  // Passing one produced a 400 from FoodData Central, because the list has to
+  // contain "Survey (FNDDS)" with a space and brackets in it and the GET form
+  // does not accept that shape.
+  //
+  // It should not be filtered anyway. The question this endpoint exists to
+  // answer is how much a LIVE table adds over the extract already inside the
+  // app, and narrowing it to the branded catalogue would decide that answer in
+  // advance rather than measure it.
 
   const started = Date.now();
   try {
