@@ -100,7 +100,10 @@ export function merge(signups, testers) {
       created_at: s.created_at,
       invited: s.invited,
       state: tester?.state || null,
-      build: tester?.build || null
+      build: tester?.build || null,
+      sessions: tester?.sessions ?? null,
+      crashes: tester?.crashes ?? null,
+      devices: tester?.devices || []
     };
   });
 
@@ -162,6 +165,31 @@ const STYLE = `
   .stale { color: var(--muted); font-size: 13px; }
 `;
 
+/// How much somebody has used it, or a dash.
+///
+/// A DASH IS NOT A ZERO. Somebody invited yesterday who has not opened it has
+/// no sessions to report; somebody who installed it and never opened it has
+/// zero. The first is waiting, the second is a problem, and printing "0" for
+/// both would hide the only one worth acting on.
+function usageCell(row) {
+  if (row.sessions === null || row.sessions === undefined) return '<td class="num stale">--</td>';
+  const crashed = Number(row.crashes || 0) > 0
+    ? ` <span class="bad" title="${row.crashes} crash${row.crashes === 1 ? '' : 'es'}">!</span>`
+    : '';
+  return `<td class="num">${row.sessions}${crashed}</td>`;
+}
+
+/// Which phone, in words, with the OS underneath.
+///
+/// Every device, not just the first: a person testing on two is worth knowing
+/// about, and the second one is usually where the layout breaks.
+function deviceCell(row) {
+  const devices = row.devices || [];
+  if (!devices.length) return '<td class="stale">--</td>';
+  return `<td>${devices.map(d => `${escape(d.model || '?')}${
+    d.os ? `<br><span class="stale">iOS ${escape(d.os)}</span>` : ''}`).join('<hr class="sep">')}</td>`;
+}
+
 function page({ rows, others, cap, newest, ascError }) {
   const invited = rows.filter(r => r.invited).length;
   const installed = rows.filter(r => r.state === 'INSTALLED').length;
@@ -176,6 +204,8 @@ function page({ rows, others, cap, newest, ascError }) {
         <td>${escape(r.name || '(no name)')}</td>
         <td><a href="mailto:${escape(r.email)}">${escape(r.email)}</a></td>
         <td class="verdict ${v.cls}">${escape(v.label)}</td>
+        ${usageCell(r)}
+        ${deviceCell(r)}
       </tr>`;
   }).join('');
 
@@ -187,6 +217,8 @@ function page({ rows, others, cap, newest, ascError }) {
                       : '<span class="stale">no address, cannot be contacted</span>'}</td>
         <td class="verdict ${t.state === 'INSTALLED' && buildNumber(t.build) === newest ? 'ok' : 'warn'}">${
           escape(t.state === 'INSTALLED' ? `on ${buildNumber(t.build) ?? '?'}` : (t.state || '').toLowerCase())}</td>
+        ${usageCell(t)}
+        ${deviceCell(t)}
       </tr>`).join('');
 
   return `<!doctype html>
@@ -194,7 +226,11 @@ function page({ rows, others, cap, newest, ascError }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Agni beta</title>
-<style>${STYLE}</style></head><body>
+<style>${STYLE}
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+hr.sep { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+</style></head><body>
 <h1>Agni beta</h1>
 <p class="count">${rows.length} signed up · ${invited} invited · ${installed} installed${
   newest ? ` · newest build ${newest}` : ''} · cap ${cap}, ${left} left
@@ -205,15 +241,18 @@ ${ascError ? `<p class="note bad">App Store Connect could not be reached, so the
   blank. The signup list below is still correct.</p>` : ''}
 
 <div class="wrap"><table>
-  <tr><th>Signed up</th><th>Name</th><th>Email</th><th>TestFlight</th></tr>${body}
+  <tr><th>Signed up</th><th>Name</th><th>Email</th><th>TestFlight</th><th class="num">Sessions</th><th>Device</th></tr>${body}
 </table></div>
 
 ${others.length ? `<h2>Testers who did not come through the form</h2>
 <div class="wrap"><table>
-  <tr><th>How</th><th>Name</th><th>Email</th><th>TestFlight</th></tr>${rest}
+  <tr><th>How</th><th>Name</th><th>Email</th><th>TestFlight</th><th class="num">Sessions</th><th>Device</th></tr>${rest}
 </table></div>` : ''}
 
-<p class="note">"Behind" means installed, but on an older build than the newest anybody has.
+<p class="note">Sessions are every time somebody opened the app, for the last year, counted by
+  App Store Connect. A dash means nobody has told us yet: an invitation not yet accepted has no
+  sessions, which is not the same as zero. A red <span class="bad">!</span> marks a crash.
+  <br>"Behind" means installed, but on an older build than the newest anybody has.
   A public-link tester has no name and no address by design, which is why the signup form exists:
   there is no way to ask an anonymous tester what the dish in their photograph actually was.</p>
 </body></html>`;

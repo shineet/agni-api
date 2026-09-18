@@ -162,3 +162,33 @@ test('a failed attempt is slowed, a good one is not', async () => {
   // after is what makes that true.
   assert.ok(Date.now() - started >= 200, 'first failure was not slowed');
 });
+
+import { deviceName } from '../api/_asc.js';
+
+test('a model identifier becomes a phone, and an unknown one stays readable', () => {
+  assert.equal(deviceName('iPhone17,2'), 'iPhone 16 Pro Max');
+  // Apple returns the comma form; the table is keyed on underscores. Both in.
+  assert.equal(deviceName('iPhone18_2'), 'iPhone 17 Pro Max');
+  assert.equal(deviceName('iPhone18,1'), 'iPhone 17 Pro');
+  // The point of the fallback: an identifier nobody has mapped yet is shown as
+  // itself, so it can be looked up. Guessing "iPhone" would send somebody to
+  // reproduce a bug on the wrong hardware.
+  assert.equal(deviceName('iPhone19,1'), 'iPhone19,1');
+  assert.equal(deviceName(null), null);
+});
+
+test('sessions and devices survive the join, and absent is not zero', () => {
+  const { rows } = merge(
+    [{ name: 'Indu B', email: 'indu@example.com', created_at: '2026-09-16T20:47:00Z', invited: true },
+     { name: 'Not yet', email: 'waiting@example.com', created_at: '2026-09-16T20:47:00Z', invited: true }],
+    testers({ 'indu@example.com': {
+      state: 'INSTALLED', build: '1.0 (140)', sessions: 10, crashes: 0,
+      devices: [{ model: 'iPhone 17 Pro', os: '26.6' }] } })
+  );
+  assert.equal(rows[0].sessions, 10);
+  assert.equal(rows[0].devices[0].model, 'iPhone 17 Pro');
+  // Somebody Apple has never reported on has null, NOT 0. A zero would read as
+  // "installed it and never opened it", which is the one case worth chasing.
+  assert.equal(rows[1].sessions, null);
+  assert.deepEqual(rows[1].devices, []);
+});

@@ -127,19 +127,99 @@ export async function listTesters() {
     throw new Error(`App Store Connect testers ${response.status}`);
   }
 
+  const testers = (await response.json())?.data || [];
+
+  // HOW MUCH EACH PERSON ACTUALLY USED IT, in one request rather than one per
+  // tester. `groupBy=betaTesters` returns a row per person with the same three
+  // figures App Store Connect shows: sessions, crashes and feedback.
+  //
+  // Asked for separately and allowed to fail on its own. Sessions are the
+  // interesting column and they are not worth losing the whole page over, so a
+  // failure here leaves the counts blank and the rest of the table intact.
+  const usage = new Map();
+  try {
+    const metrics = await fetch(
+      `${API}/apps/${appId}/metrics/betaTesterUsages?groupBy=betaTesters&limit=200`,
+      { headers });
+    if (metrics.ok) {
+      for (const row of (await metrics.json())?.data || []) {
+        const id = row?.dimensions?.betaTesters?.data?.id;
+        const values = row?.dataPoints?.[0]?.values;
+        if (!id || !values) continue;
+        usage.set(id, {
+          sessions: Number(values.sessionCount || 0),
+          crashes: Number(values.crashCount || 0),
+          feedback: Number(values.feedbackCount || 0)
+        });
+      }
+    }
+  } catch {
+    // Left empty on purpose. See above.
+  }
+
   const byEmail = new Map();
   const anonymous = [];
-  for (const tester of (await response.json())?.data || []) {
+  for (const tester of testers) {
     const a = tester.attributes || {};
     const devices = a.appDevices || [];
+    const counts = usage.get(tester.id) || {};
     const entry = {
       state: a.state || 'UNKNOWN',
       build: devices[0]?.appBuildVersion || null,
       inviteType: a.inviteType || null,
-      name: `${a.firstName || ''} ${a.lastName || ''}`.trim()
+      name: `${a.firstName || ''} ${a.lastName || ''}`.trim(),
+      sessions: counts.sessions ?? null,
+      crashes: counts.crashes ?? null,
+      feedback: counts.feedback ?? null,
+      // Every device a person has run it on, not only the first. Somebody
+      // testing on a phone and an iPad is exactly who you want to hear from.
+      devices: devices.map(d => ({
+        model: deviceName(d.model),
+        raw: d.model || null,
+        os: d.osVersion || null,
+        build: d.appBuildVersion || null
+      }))
     };
     if (a.email) byEmail.set(String(a.email).toLowerCase(), entry);
     else anonymous.push(entry);
   }
   return { byEmail, anonymous };
+}
+
+/// Apple's internal model identifier, in the words people use.
+///
+/// The API returns "iPhone17_2" and nobody knows what that is. An identifier
+/// that is not in this table is shown AS ITSELF rather than guessed at,
+/// because "iPhone" would be a worse answer than the raw string for anybody
+/// trying to reproduce a bug on the right hardware.
+///
+/// The iPhone 17 family is the part worth being careful about, and only the
+/// two entries below are confirmed against real devices: iPhone18,1 is a
+/// tester's iPhone 17 Pro and iPhone18,2 is Shine's iPhone 17 Pro Max. The
+/// rest of that family is deliberately absent. I had guessed at it and had
+/// iPhone18,1 wrong, which is the failure worth avoiding: an unknown
+/// identifier shown as itself sends somebody to look it up, while a confident
+/// wrong name sends them to the wrong phone.
+const DEVICE_NAMES = {
+  iPhone18_1: 'iPhone 17 Pro', iPhone18_2: 'iPhone 17 Pro Max',
+  iPhone17_1: 'iPhone 16 Pro', iPhone17_2: 'iPhone 16 Pro Max',
+  iPhone17_3: 'iPhone 16', iPhone17_4: 'iPhone 16 Plus',
+  iPhone17_5: 'iPhone 16e',
+  iPhone16_1: 'iPhone 15 Pro', iPhone16_2: 'iPhone 15 Pro Max',
+  iPhone15_4: 'iPhone 15', iPhone15_5: 'iPhone 15 Plus',
+  iPhone15_2: 'iPhone 14 Pro', iPhone15_3: 'iPhone 14 Pro Max',
+  iPhone14_7: 'iPhone 14', iPhone14_8: 'iPhone 14 Plus',
+  iPhone14_2: 'iPhone 13 Pro', iPhone14_3: 'iPhone 13 Pro Max',
+  iPhone14_4: 'iPhone 13 mini', iPhone14_5: 'iPhone 13',
+  iPhone13_1: 'iPhone 12 mini', iPhone13_2: 'iPhone 12',
+  iPhone13_3: 'iPhone 12 Pro', iPhone13_4: 'iPhone 12 Pro Max',
+  iPhone14_6: 'iPhone SE (3rd gen)', iPhone12_8: 'iPhone SE (2nd gen)',
+  iPhone12_1: 'iPhone 11', iPhone12_3: 'iPhone 11 Pro',
+  iPhone12_5: 'iPhone 11 Pro Max'
+};
+
+export function deviceName(identifier) {
+  if (!identifier) return null;
+  const key = String(identifier).replace(/,/g, '_');
+  return DEVICE_NAMES[key] || String(identifier).replace(/_/g, ',');
 }
