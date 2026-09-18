@@ -98,7 +98,13 @@ export function merge(signups, testers) {
       name: s.name,
       email: s.email,
       created_at: s.created_at,
-      invited: s.invited,
+      // THE FLAG IS A LOCAL NOTE; APPLE IS THE AUTHORITY. The invite and the
+      // write recording it are two steps, and the second can be lost while the
+      // first succeeded: that is exactly what happened on 18 Sept, when a
+      // signup showed "invite failed" in red while Apple had had the person as
+      // a tester since the moment they signed up. Anybody Apple knows about
+      // was invited, whatever this row remembers.
+      invited: Boolean(s.invited || tester),
       state: tester?.state || null,
       build: tester?.build || null,
       sessions: tester?.sessions ?? null,

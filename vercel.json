@@ -19,7 +19,7 @@
       "maxDuration": 10
     },
     "api/join.js": {
-      "maxDuration": 15
+      "maxDuration": 30
     },
     "api/beta-signups.js": {
       "maxDuration": 20

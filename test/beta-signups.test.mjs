@@ -254,3 +254,19 @@ test('every App Store Connect call carries a deadline', async () => {
     }
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('a lost write does not turn a real invitation red', () => {
+  const { rows } = merge(
+    [{ name: 'Renjith Nair', email: 'r@example.com', created_at: '2026-09-18T15:20:00Z',
+       invited: false },
+     { name: 'Nobody Home', email: 'n@example.com', created_at: '2026-09-18T15:20:00Z',
+       invited: false }],
+    testers({ 'r@example.com': { state: 'INVITED', build: null } })
+  );
+  // Apple has him as a tester, so he was invited, whatever the row remembers.
+  // This is the 18 Sept case: the invite landed and the write recording it was
+  // killed with the function.
+  assert.equal(rows[0].invited, true);
+  // Somebody Apple has never heard of is still a genuine failure.
+  assert.equal(rows[1].invited, false);
+});
