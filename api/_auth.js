@@ -118,6 +118,11 @@ async function meter(keyId, counter, meterClass, previousCostUSD) {
   // counts against ITS OWN columns. The counter is shared on purpose: it is a
   // freshness check on the device, not an allowance, and letting two classes
   // keep separate counters would reopen the replay window between them.
+  //
+  // AI NEVER REACHES HERE, and the gate now refuses it rather than metering it
+  // as research, which is what it silently did before verification caught it.
+  // If a future class is added, add it in BOTH places or it will be refused,
+  // which is the failure worth having.
   const verdict = await supabaseRPC('agni_attest_gate_class', {
     p_key_id: keyId,
     p_counter: counter,

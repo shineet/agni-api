@@ -73,14 +73,32 @@ begin
     return;
   end if;
 
+  -- THIS GATE METERS TWO CLASSES AND REFUSES THE REST.
+  --
+  -- It used to branch 'read' against everything else, which meant a caller
+  -- passing 'ai' was metered against the RESEARCH counters and the research
+  -- spend cap, while the AI per-minute, per-hour, per-day and spend limits were
+  -- not consulted at all. Nothing in production does that today, because
+  -- _auth.js sends ai to agni_attest_gate, but the function accepted it in
+  -- silence and would have gone on accepting it.
+  --
+  -- AI IS NOT ADDED HERE, DELIBERATELY. agni_attest_gate already meters it, has
+  -- an hour window this function has no column for, and is the gate every
+  -- shipped build already goes through. Two places metering the same class is
+  -- how the two drift and how a limit stops being enforced without anybody
+  -- noticing. So an unrecognised class is refused, loudly, and the counter is
+  -- left alone because a refusal this early has not spent anything.
   if p_class = 'read' then
     m_count := k.read_minute_count; m_start := k.read_minute_start;
     d_count := k.read_day_count;    d_start := k.read_day_start;
     d_spend := 0;
-  else
+  elsif p_class = 'research' then
     m_count := k.research_minute_count; m_start := k.research_minute_start;
     d_count := k.research_day_count;    d_start := k.research_day_start;
     d_spend := k.research_day_spend_usd;
+  else
+    return query select false, 'unknown_class'::text, 0;
+    return;
   end if;
 
   if now_ts - m_start >= interval '1 minute' then m_count := 0; m_start := now_ts; end if;
@@ -97,7 +115,7 @@ begin
            read_minute_count = m_count + 1, read_minute_start = m_start,
            read_day_count = d_count + 1,    read_day_start = d_start
      where key_id = p_key_id;
-  else
+  else  -- research, and only research: every other class returned above
     update agni_attest_keys
        set counter = p_counter, last_seen = now_ts,
            research_minute_count = m_count + 1, research_minute_start = m_start,
