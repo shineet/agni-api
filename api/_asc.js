@@ -52,8 +52,15 @@ function token() {
 /// is already a tester. That is not a failure worth showing anybody.
 export async function inviteTester({ email, first, last, groupId }) {
 
+  // A DEADLINE, because the function that calls this is killed at 15 seconds
+  // and a kill runs no catch. join.js already records the address before
+  // calling here and answers "your invitation is being sent by hand" when this
+  // throws, but none of that care survives the platform stopping the process
+  // mid-flight: the person just watches the page fail. This turns a hang into
+  // the graceful answer that was always meant to happen.
   const response = await fetch(`${API}/betaTesters`, {
     method: 'POST',
+    signal: AbortSignal.timeout(8000),
     headers: {
       authorization: `Bearer ${token()}`,
       'content-type': 'application/json'

@@ -30,10 +30,17 @@ export async function supabaseRPC(fn, args) {
     headers.authorization = `Bearer ${key}`;
   }
 
+  // EVERY ENDPOINT COMES THROUGH HERE, so an unbounded wait here is an
+  // unbounded wait everywhere. Ten seconds is far beyond any healthy RPC and
+  // still inside the shortest function ceiling, which means a slow database
+  // surfaces as this call throwing, where each caller already has a considered
+  // answer for a failure, rather than as the platform killing the request and
+  // running none of that handling.
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(args)
+    body: JSON.stringify(args),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
