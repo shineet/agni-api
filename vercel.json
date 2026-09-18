@@ -32,6 +32,9 @@
     },
     "api/research.js": {
       "maxDuration": 25
+    },
+    "api/fatsecret.js": {
+      "maxDuration": 15
     }
   },
   "cleanUrls": true,
