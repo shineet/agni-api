@@ -13,9 +13,12 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 /// It also keeps the key off the phone, which is the ordinary reason, and the
 /// less interesting one.
 ///
-/// METERED ON THE RESEARCH CLASS. A food lookup is not a photo estimate and
-/// must never be able to spend its allowance. FDC itself is free, so the
-/// counters here are about protecting the rate limit rather than a bill.
+/// METERED ON THE READ CLASS. A food lookup must never be able to spend photo
+/// estimation's allowance, which is what the separate classes are for. It is
+/// READ rather than RESEARCH because FoodData Central is free: the research
+/// class exists to cap money, and charging a free call against it starved the
+/// one call in the chain that does cost something. What needs protecting here
+/// is the thousand-an-hour request ceiling, which is what read is for.
 ///
 /// GET ?q=<query>&kind=<search|barcode>
 const FDC_SEARCH = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -67,7 +70,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, { error: 'GET only.' });
 
   const auth = await authenticate(req, {
-    meterClass: MeterClass.research,
+    meterClass: MeterClass.read,
     path: '/api/fdc',
     query: req.query || {},
     rawBody: ''
