@@ -29,6 +29,9 @@
     },
     "api/fdc.js": {
       "maxDuration": 15
+    },
+    "api/research.js": {
+      "maxDuration": 25
     }
   },
   "cleanUrls": true,
