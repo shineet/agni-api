@@ -192,3 +192,65 @@ test('sessions and devices survive the join, and absent is not zero', () => {
   assert.equal(rows[1].sessions, null);
   assert.deepEqual(rows[1].devices, []);
 });
+
+import crypto from 'node:crypto';
+import { listTesters } from '../api/_asc.js';
+
+/// The bug this guards: a try/catch around the usage call caught an ERROR and
+/// not SLOWNESS, so a slow App Store Connect hung the whole function past its
+/// ceiling and the page 504'd holding a tester list it had already fetched.
+// A throwaway P-256 key so token() can sign. Nothing here talks to Apple.
+function fakeAscEnv() {
+  const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  process.env.ASC_KEY_ID = 'TESTKEY123';
+  process.env.ASC_ISSUER_ID = '00000000-0000-0000-0000-000000000000';
+  process.env.ASC_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  process.env.ASC_BETA_GROUP_ID = 'g1';
+}
+
+function stubAsc({ metrics }) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), signal: init.signal });
+    const u = String(url);
+    if (u.includes('/app')) return json({ data: { id: '123' } });
+    if (u.includes('betaTesters?filter')) return json({ data: [{
+      id: 't1', attributes: { email: 'a@example.com', state: 'INSTALLED', firstName: 'A', lastName: 'B',
+      appDevices: [{ model: 'iPhone17,2', osVersion: '26.6', appBuildVersion: '140' }] } }] });
+    if (u.includes('betaTesterUsages')) return metrics();
+    throw new Error('unexpected ' + u);
+  };
+  return calls;
+}
+const json = (body) => ({ ok: true, status: 200, json: async () => body });
+
+test('a usage call that dies leaves the page standing, with blank counts', async () => {
+  const realFetch = globalThis.fetch;
+  fakeAscEnv();
+  try {
+    stubAsc({ metrics: () => { const e = new Error('The operation was aborted');
+                               e.name = 'TimeoutError'; throw e; } });
+    const { byEmail } = await listTesters();
+    const t = byEmail.get('a@example.com');
+    // The tester list survived, which is the whole point.
+    assert.equal(t.state, 'INSTALLED');
+    assert.equal(t.devices[0].model, 'iPhone 16 Pro Max');
+    // And absent counts stay absent rather than becoming zero.
+    assert.equal(t.sessions, null);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('every App Store Connect call carries a deadline', async () => {
+  const realFetch = globalThis.fetch;
+  fakeAscEnv();
+  try {
+    const calls = stubAsc({ metrics: () => json({ data: [] }) });
+    await listTesters();
+    assert.ok(calls.length >= 3, `expected 3 calls, saw ${calls.length}`);
+    for (const c of calls) {
+      // Without this a slow upstream is indistinguishable from a hung one, and
+      // the function is killed rather than degrading.
+      assert.ok(c.signal, `no timeout on ${c.url}`);
+    }
+  } finally { globalThis.fetch = realFetch; }
+});

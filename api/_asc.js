@@ -112,7 +112,8 @@ export async function listTesters() {
 
   // The app id comes from the group rather than a second environment variable.
   // Two things that must agree are one thing that can silently disagree.
-  const appResponse = await fetch(`${API}/betaGroups/${groupId}/app`, { headers });
+  const appResponse = await fetch(`${API}/betaGroups/${groupId}/app`,
+                                  { headers, signal: AbortSignal.timeout(5000) });
   if (!appResponse.ok) {
     throw new Error(`App Store Connect app lookup ${appResponse.status}`);
   }
@@ -122,7 +123,8 @@ export async function listTesters() {
   // NOTE: /apps/{id}/betaTesters is FORBIDDEN for GET -- Apple allows only
   // DELETE on that relationship. The filter form is the only way to list them.
   const response = await fetch(
-    `${API}/betaTesters?filter[apps]=${appId}&limit=200`, { headers });
+    `${API}/betaTesters?filter[apps]=${appId}&limit=200`,
+    { headers, signal: AbortSignal.timeout(6000) });
   if (!response.ok) {
     throw new Error(`App Store Connect testers ${response.status}`);
   }
@@ -136,11 +138,18 @@ export async function listTesters() {
   // Asked for separately and allowed to fail on its own. Sessions are the
   // interesting column and they are not worth losing the whole page over, so a
   // failure here leaves the counts blank and the rest of the table intact.
+  //
+  // IT NEEDS ITS OWN DEADLINE, and the first version of this did not have one.
+  // A try/catch catches an ERROR, not SLOWNESS: when this call simply took its
+  // time, nothing threw, the whole function hit the 10 second ceiling and the
+  // page returned 504 with the tester list it already had in hand. Four
+  // seconds is far longer than this ever needs and still leaves room for the
+  // rest of the request.
   const usage = new Map();
   try {
     const metrics = await fetch(
       `${API}/apps/${appId}/metrics/betaTesterUsages?groupBy=betaTesters&limit=200`,
-      { headers });
+      { headers, signal: AbortSignal.timeout(4000) });
     if (metrics.ok) {
       for (const row of (await metrics.json())?.data || []) {
         const id = row?.dimensions?.betaTesters?.data?.id;

@@ -22,7 +22,7 @@
       "maxDuration": 15
     },
     "api/beta-signups.js": {
-      "maxDuration": 10
+      "maxDuration": 20
     },
     "api/auth-telemetry.js": {
       "maxDuration": 10
