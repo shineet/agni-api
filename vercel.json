@@ -26,6 +26,9 @@
     },
     "api/auth-telemetry.js": {
       "maxDuration": 10
+    },
+    "api/fdc.js": {
+      "maxDuration": 15
     }
   },
   "cleanUrls": true,
