@@ -270,3 +270,39 @@ test('a lost write does not turn a real invitation red', () => {
   // Somebody Apple has never heard of is still a genuine failure.
   assert.equal(rows[1].invited, false);
 });
+
+/// A public-link tester has no name and no email. When Shine knows who one is,
+/// the page says so -- and says that it is saying so by hand.
+test('a hand-written name labels an anonymous tester without claiming Apple knows it', () => {
+  const testers = {
+    byEmail: new Map(),
+    anonymous: [
+      { id: 'feaf9e11-a37b-4b2a-adab-a69ea00a6c7d', state: 'INSTALLED',
+        build: '1.0 (151)', inviteType: 'PUBLIC_LINK', name: '', devices: [] },
+      { id: 'c3b3cbd1-5b6f-492f-bff1-273c626eb718', state: 'INSTALLED',
+        build: '1.0 (101)', inviteType: 'PUBLIC_LINK', name: '', devices: [] }
+    ]
+  };
+  const { others } = merge([], testers);
+  const named = others.find(t => t.id === 'feaf9e11-a37b-4b2a-adab-a69ea00a6c7d');
+  const unnamed = others.find(t => t.id === 'c3b3cbd1-5b6f-492f-bff1-273c626eb718');
+
+  assert.equal(named.knownAs, 'Suresh Bhaskar');
+  // The other public-link tester must NOT inherit a label.
+  assert.equal(unnamed.knownAs, null);
+  // And neither gains an address, because neither has one.
+  assert.equal(named.email, null);
+});
+
+/// The knowledge is keyed on Apple's tester id, which is the only stable handle
+/// a person with no name and no address has. A label keyed on anything else --
+/// a build, a device, a position in the list -- would move to somebody else the
+/// first time any of those changed.
+test('an unknown anonymous tester is left anonymous', () => {
+  const { others } = merge([], {
+    byEmail: new Map(),
+    anonymous: [{ id: 'nobody-knows-this-one', state: 'INSTALLED',
+                  build: '1.0 (151)', inviteType: 'PUBLIC_LINK', name: '', devices: [] }]
+  });
+  assert.equal(others[0].knownAs, null);
+});

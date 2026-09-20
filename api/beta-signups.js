@@ -20,6 +20,24 @@ import { listTesters } from './_asc.js';
 
 const CAP_DEFAULT = 20;
 
+/// Names for people App Store Connect cannot name, keyed by Apple's tester id.
+///
+/// A public-link tester has no name and no email, by design: that is the trade
+/// the link makes, and it is why somebody can be using Agni daily and be
+/// invisible on this page. Apple will never fill this in, so when Shine knows
+/// who one of them is, the knowledge goes here.
+///
+/// SHOWN AS A HAND-WRITTEN LABEL, never as though Apple said it. The row keeps
+/// saying "public link" and "no address", because both are still true: this
+/// person still cannot be contacted through TestFlight. The label is an aid to
+/// reading the page, not a fact about the account.
+const NAMED_BY_HAND = {
+  // Identified from his own screenshots: the only tester on a build new enough
+  // to have the Budget Diagnostics rows he photographed, and the only one Shine
+  // could not account for by email.
+  'feaf9e11-a37b-4b2a-adab-a69ea00a6c7d': 'Suresh Bhaskar'
+};
+
 /// Failed attempts, per address, so a short password is not a short password to
 /// a script. Nothing here is stored: the map lives in one warm function
 /// instance and empties itself when that instance goes away.
@@ -120,7 +138,9 @@ export function merge(signups, testers) {
   for (const [email, t] of testers.byEmail) {
     if (!seen.has(email)) others.push({ ...t, email });
   }
-  for (const t of testers.anonymous) others.push({ ...t, email: null });
+  for (const t of testers.anonymous) {
+    others.push({ ...t, email: null, knownAs: NAMED_BY_HAND[t.id] || null });
+  }
 
   return { rows, others };
 }
@@ -218,7 +238,9 @@ function page({ rows, others, cap, newest, ascError }) {
   const rest = others.map(t => `
       <tr>
         <td class="time">${escape(t.inviteType === 'PUBLIC_LINK' ? 'public link' : 'added by hand')}</td>
-        <td>${escape(t.name || 'Anonymous')}</td>
+        <td>${t.knownAs
+          ? `${escape(t.knownAs)} <span class="stale">named by hand</span>`
+          : escape(t.name || 'Anonymous')}</td>
         <td>${t.email ? `<a href="mailto:${escape(t.email)}">${escape(t.email)}</a>`
                       : '<span class="stale">no address, cannot be contacted</span>'}</td>
         <td class="verdict ${t.state === 'INSTALLED' && buildNumber(t.build) === newest ? 'ok' : 'warn'}">${

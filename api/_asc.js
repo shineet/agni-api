@@ -180,6 +180,10 @@ export async function listTesters() {
     const devices = a.appDevices || [];
     const counts = usage.get(tester.id) || {};
     const entry = {
+      // Apple's own id for this person. Stable across builds and the only
+      // handle a public-link tester has, since they have no name and no
+      // address. The page uses it to hang a hand-written label on one.
+      id: tester.id,
       state: a.state || 'UNKNOWN',
       build: devices[0]?.appBuildVersion || null,
       inviteType: a.inviteType || null,
