@@ -33,9 +33,6 @@
     "api/research.js": {
       "maxDuration": 25
     },
-    "api/fatsecret.js": {
-      "maxDuration": 15
-    },
     "api/ingredient.js": {
       "maxDuration": 55
     }

@@ -1,3 +1,16 @@
+// PARKED, NOT DELETED, AND ONE `git mv` FROM RETURNING.
+//
+// Vercel's Hobby plan allows twelve Serverless Functions per deployment and
+// /api/ingredient was the thirteenth. This adapter is the one that costs
+// nothing to stand down: it is under evaluation, it is blocked upstream by an
+// IP allow-list that Vercel's rotating egress cannot satisfy, its policy says
+// `approvedForProduction: false`, and `FatSecretProvider()` is not constructed
+// anywhere in the app -- not in the shipping registry, not in the bake-off.
+// Nothing calls it, so nothing breaks.
+//
+// The leading underscore is what makes it stop being a route. The code is
+// untouched below. To bring it back: rename to fatsecret.js and restore its
+// entry in vercel.json.
 import { json, report } from './_lib.js';
 import { authenticate, recordAuth, MeterClass } from './_auth.js';
 
