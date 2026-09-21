@@ -35,6 +35,9 @@
     },
     "api/fatsecret.js": {
       "maxDuration": 15
+    },
+    "api/ingredient.js": {
+      "maxDuration": 55
     }
   },
   "cleanUrls": true,
