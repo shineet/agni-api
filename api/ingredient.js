@@ -1,5 +1,6 @@
 import { json, report, costOfUsage } from './_lib.js';
 import { authenticate, recordAuth, MeterClass, researchEnabled } from './_auth.js';
+import { supabaseRPC } from './_supabase.js';
 
 /// Look up what one INGREDIENT contains, on the public web, with sources.
 ///
@@ -217,6 +218,54 @@ function shape(parsed, cited) {
   };
 }
 
+/// The shared store, which is an optimisation and never a dependency.
+///
+/// NO COLUMN FOR A PERSON. The key is a normalised ingredient name and its
+/// form; the payload is the evidence rows. Nothing about who asked, what meal
+/// it was for, or what they photographed. See schema-ingredient-cache.sql.
+///
+/// EVERY FAILURE HERE IS SILENT AND COSTS A LOOKUP. A database that is down, a
+/// table that has not been created yet, a payload that will not parse: all of
+/// them mean this request does what it would have done before the cache
+/// existed. None of them can make the endpoint fail, and none can make it
+/// answer wrongly.
+function cacheKey(query, form) {
+  const normalised = String(query).toLowerCase().normalize('NFKD')
+    .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalised + '|' + (form || '');
+}
+
+/// How long a shared answer stands, by the best source in it. Housekeeping
+/// intervals, not confidence: a figure does not become truer for being fresh.
+function ttlSeconds(results) {
+  const day = 86400;
+  if (!results.length) return 7 * day;                 // nothing found: cheapest to be wrong about
+  const best = Math.min(...results.map(r => r.source_tier));
+  if (best <= 2) return 90 * day;                      // national table, peer-reviewed
+  if (best <= 4) return 30 * day;                      // health institution, manufacturer panel
+  return 14 * day;                                     // aggregators and ordinary pages
+}
+
+async function cachedEvidence(key) {
+  try {
+    const payload = await supabaseRPC('agni_ingredient_evidence_get', { p_key: key });
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    if (!row || typeof row !== 'object' || !Array.isArray(row.results)) return null;
+    return row;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function rememberEvidence(key, payload, seconds) {
+  try {
+    await supabaseRPC('agni_ingredient_evidence_put',
+                      { p_key: key, p_payload: payload, p_ttl_seconds: seconds });
+  } catch (error) {
+    // Nobody is waiting on this and nothing depends on it.
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'POST only.' });
 
@@ -249,6 +298,27 @@ export default async function handler(req, res) {
   const wantedForm = FORMS.has(body.form) ? body.form : null;
 
   const started = Date.now();
+
+  // ALREADY ANSWERED, BY SOMEBODY, FOR EVERYBODY. The rows come back exactly as
+  // they were stored -- not a figure, the evidence -- and the app judges them
+  // with the same gate it applies to a live answer.
+  const key = cacheKey(query, wantedForm);
+  const cached = await cachedEvidence(key);
+  if (cached) {
+    res.setHeader('cache-control', 'no-store');
+    return json(res, 200, {
+      ...cached,
+      query,
+      requested_form: wantedForm,
+      // NOTHING WAS SPENT AND NOTHING WAS SEARCHED, and the numbers say so
+      // rather than repeating what the original lookup cost.
+      cost_usd: 0,
+      search_operations: 0,
+      cached: true,
+      took_ms: Date.now() - started
+    });
+  }
+
   const asked = wantedForm
     ? `${query} (${wantedForm}) -- nutrition per 100 g, with sources`
     : `${query} -- nutrition per 100 g, with sources`;
@@ -308,6 +378,20 @@ export default async function handler(req, res) {
   result.cost_usd = costOfUsage(MODEL, payload?.usage) + searches * SEARCH_COST_USD;
   result.search_operations = searches;
   result.retrieved_at = new Date().toISOString();
+  result.cached = false;
+
+  // SHARED ONLY WHEN IT WAS ACTUALLY RETRIEVED. A run that searched and found
+  // nothing citable is stored as an absence, which expires in a week; a run
+  // that failed never reaches this line at all.
+  await rememberEvidence(key, {
+    identity: result.identity,
+    results: result.results,
+    agreement: result.agreement,
+    notes: result.notes,
+    evidence: result.evidence,
+    retrieved_at: result.retrieved_at
+  }, ttlSeconds(result.results));
+
   result.took_ms = Date.now() - started;
   result.model = MODEL;
   res.setHeader('cache-control', 'no-store');
