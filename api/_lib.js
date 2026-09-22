@@ -7,7 +7,27 @@ export const FREE_LIMIT = Number(process.env.FREE_ESTIMATE_LIMIT || 50);
 /// Models this proxy will pay for. The app supplies the whole request body so
 /// the prompt lives in one place, which means the body is also untrusted: without
 /// this, anyone holding the app token could bill an expensive model to the key.
-const ALLOWED_MODELS = new Set(['claude-sonnet-5', 'claude-haiku-4-5']);
+///
+/// BOTH SPELLINGS OF HAIKU, and that is the point rather than an oversight.
+///
+/// The app sends the dated id. The list held only the bare alias, so every
+/// call using the fast model -- dish search, ingredient refinement, drink
+/// identification -- came back `400 Model claude-haiku-4-5-20251001 is not
+/// allowed.` Photo estimation uses the Sonnet id, which was on the list, so
+/// photographs worked and searching did not.
+///
+/// It stayed hidden because a personal API key skips this proxy entirely and
+/// goes straight to Anthropic, where the dated id is perfectly valid. The one
+/// person who could not reproduce it was the only person with a key: it was
+/// broken for every tester without one.
+///
+/// Carrying both means neither side can break the other by picking a different
+/// spelling of the same model again.
+const ALLOWED_MODELS = new Set([
+  'claude-sonnet-5',
+  'claude-haiku-4-5',
+  'claude-haiku-4-5-20251001',
+]);
 const MAX_TOKENS_CAP = 4096;
 
 /// THE LEGACY PATH, and its sunset.
