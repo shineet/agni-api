@@ -204,6 +204,12 @@ export default async function handler(req, res) {
     });
   }
 
+  // STREAMED when the app asks for it, which only builds that can read a
+  // stream do. Every other build gets exactly the buffered reply it always has.
+  if (request.stream === true) {
+    return streamed(res, request, subject, quota);
+  }
+
   let upstream;
   try {
     upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -244,4 +250,81 @@ export default async function handler(req, res) {
 
   res.status(upstream.status).setHeader('content-type', 'application/json');
   res.send(text);
+}
+
+/// How long a streamed answer may run, end to end.
+///
+/// Longer than the buffered 40s on purpose. A big thali was timed at 28s and
+/// one failed outright past 50s: the answer is long because the plate is, and
+/// a stream shows the dishes as they come, so waiting is no longer staring at
+/// a spinner. Still inside the function's maxDuration in vercel.json, so a
+/// slow upstream ends as an error event the app can read, never as a kill.
+export const STREAM_TIMEOUT_MS = Number(process.env.STREAM_TIMEOUT_MS || 110_000);
+
+/// Relays Anthropic's server-sent events to the app as they arrive.
+///
+/// Same credit rule as the buffered path: only a COMPLETE answer costs one,
+/// so a stream that is cut part way does not. Complete means Anthropic sent
+/// message_stop, which is the only event that cannot arrive early.
+async function streamed(res, request, subject, quota) {
+  let upstream;
+  try {
+    upstream = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(STREAM_TIMEOUT_MS)
+    });
+  } catch (error) {
+    report('anthropic stream call', error);
+    return fail(res, 503, AgniError.serviceUnavailable,
+                'Photo analysis is unavailable right now. You can log this meal by hand.');
+  }
+
+  // A refusal before the stream starts (400, 429, 529) is an ordinary JSON
+  // error, passed through exactly as the buffered path does.
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text();
+    res.status(upstream.status).setHeader('content-type', 'application/json');
+    return res.send(text);
+  }
+
+  res.status(200);
+  res.setHeader('content-type', 'text/event-stream');
+  res.setHeader('cache-control', 'no-cache, no-transform');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  const decoder = new TextDecoder();
+  let seen = '';
+  try {
+    for await (const chunk of upstream.body) {
+      res.write(chunk);
+      // Only the tail is kept: enough to find message_stop across a chunk
+      // boundary without holding the whole answer twice.
+      seen = (seen + decoder.decode(chunk, { stream: true })).slice(-400);
+      if (seen.includes('"type":"message_stop"')) seen = 'message_stop';
+    }
+  } catch (error) {
+    report('anthropic stream cut', error);
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    res.write('event: error\ndata: ' + JSON.stringify({
+      type: 'error',
+      error: {
+        type: AgniError.serviceUnavailable,
+        message: timedOut
+          ? 'Photo analysis took too long. You can log this meal by hand.'
+          : 'Photo analysis was cut off. You can try again or log this meal by hand.'
+      }
+    }) + '\n\n');
+    return res.end();
+  }
+
+  if (seen === 'message_stop' && !quota.unlimited) {
+    try { await consume(subject); } catch (error) { report('consume', error); }
+  }
+  res.end();
 }

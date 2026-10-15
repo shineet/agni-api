@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/estimate.js": {
-      "maxDuration": 55
+      "maxDuration": 120
     },
     "api/attest.js": {
       "maxDuration": 15
