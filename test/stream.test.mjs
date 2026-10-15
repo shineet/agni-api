@@ -59,24 +59,26 @@ function fakeFetch({ events, cutAfter }) {
   return fn;
 }
 
-function fakeReq(request) {
+function fakeReq(request, extraHeaders = {}) {
   const body = Buffer.from(JSON.stringify({ installId: 'install-1', request }));
   return {
     method: 'POST',
-    headers: { authorization: 'Bearer test-token', 'content-length': String(body.length) },
+    headers: { authorization: 'Bearer test-token', 'content-length': String(body.length), ...extraHeaders },
     async *[Symbol.asyncIterator]() { yield body; }
   };
 }
 
 function fakeRes() {
   const res = {
-    statusCode: 0, headers: {}, written: '', ended: false,
+    statusCode: 0, headers: {}, written: '', ended: false, writableEnded: false,
+    listeners: {},
+    on(event, fn) { (this.listeners[event] ||= []).push(fn); return this; },
     status(code) { this.statusCode = code; return this; },
     setHeader(k, v) { this.headers[k.toLowerCase()] = v; return this; },
     flushHeaders() {},
     write(chunk) { this.written += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'); return true; },
     send(text) { this.written += text; this.ended = true; return this; },
-    end() { this.ended = true; return this; },
+    end() { this.ended = true; this.writableEnded = true; return this; },
     json(obj) { return this.send(JSON.stringify(obj)); }
   };
   return res;
@@ -121,4 +123,42 @@ test('a stream may ask for up to 8192 tokens, a buffered call still only 4096', 
   assert.match(validateRequest(request({ stream: true, max_tokens: 9000 })), /8192/);
   assert.match(validateRequest(request({ max_tokens: 8000 })), /4096/);
   assert.equal(validateRequest(request({ max_tokens: 4096 })), null);
+});
+
+test('a big plate pays once: part 1 is charged, later parts are not', async () => {
+  for (const [part, charged] of [['1', 1], ['2', 0], ['3', 0]]) {
+    globalThis.fetch = fakeFetch({ events: EVENTS });
+    const res = fakeRes();
+    await handler(fakeReq(request({ stream: true }), { 'x-agni-part': part }), res);
+    assert.equal(res.written, EVENTS.join(''), `part ${part} still streams in full`);
+    assert.equal(globalThis.fetch.calls.filter(c => c.url.includes('agni_consume')).length, charged,
+                 `part ${part}`);
+  }
+});
+
+test('the app hanging up stops the upstream answer, and costs no credit', async () => {
+  let upstreamSignal;
+  const base = fakeFetch({ events: EVENTS });
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('api.anthropic.com')) {
+      upstreamSignal = options.signal;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(EVENTS[0]));
+          options.signal.addEventListener('abort', () => controller.error(options.signal.reason));
+        }
+      });
+      return new Response(stream, { status: 200 });
+    }
+    return base(url, options);
+  };
+  globalThis.fetch.calls = base.calls;
+  const res = fakeRes();
+  const done = handler(fakeReq(request({ stream: true })), res);
+  await new Promise(r => setTimeout(r, 20));
+  for (const fn of res.listeners.close || []) fn();
+  await done;
+  assert.ok(upstreamSignal.aborted, 'the upstream request was aborted');
+  assert.equal(base.calls.filter(c => c.url.includes('agni_consume')).length, 0);
 });

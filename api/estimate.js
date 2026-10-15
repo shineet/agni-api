@@ -207,7 +207,12 @@ export default async function handler(req, res) {
   // STREAMED when the app asks for it, which only builds that can read a
   // stream do. Every other build gets exactly the buffered reply it always has.
   if (request.stream === true) {
-    return streamed(res, request, subject, quota);
+    // A big plate is estimated in parallel parts (x-agni-part 1, 2, 3...).
+    // ONE CREDIT PER PHOTO either way: part 1 pays, later parts do not, and
+    // the main call that started them is stopped by the app before it
+    // finishes, so it never reaches message_stop and never pays either.
+    const part = Math.max(0, Math.min(9, Number(req.headers['x-agni-part'] || 0) || 0));
+    return streamed(req, res, request, subject, quota, part);
   }
 
   let upstream;
@@ -266,7 +271,13 @@ export const STREAM_TIMEOUT_MS = Number(process.env.STREAM_TIMEOUT_MS || 110_000
 /// Same credit rule as the buffered path: only a COMPLETE answer costs one,
 /// so a stream that is cut part way does not. Complete means Anthropic sent
 /// message_stop, which is the only event that cannot arrive early.
-async function streamed(res, request, subject, quota) {
+async function streamed(req, res, request, subject, quota, part = 0) {
+  // STOPPED WHEN THE APP HANGS UP. The app stops a stream once parallel parts
+  // have covered the rest of the plate, and without this Anthropic would go on
+  // writing an answer nobody reads, and billing for it.
+  const hangUp = new AbortController();
+  res.on('close', () => { if (!res.writableEnded) hangUp.abort(); });
+
   let upstream;
   try {
     upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -277,7 +288,7 @@ async function streamed(res, request, subject, quota) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(STREAM_TIMEOUT_MS)
+      signal: AbortSignal.any([hangUp.signal, AbortSignal.timeout(STREAM_TIMEOUT_MS)])
     });
   } catch (error) {
     report('anthropic stream call', error);
@@ -323,7 +334,7 @@ async function streamed(res, request, subject, quota) {
     return res.end();
   }
 
-  if (seen === 'message_stop' && !quota.unlimited) {
+  if (seen === 'message_stop' && !quota.unlimited && part <= 1) {
     try { await consume(subject); } catch (error) { report('consume', error); }
   }
   res.end();
