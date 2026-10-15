@@ -130,7 +130,8 @@ test('a big plate pays once: part 1 is charged, later parts are not', async () =
     globalThis.fetch = fakeFetch({ events: EVENTS });
     const res = fakeRes();
     await handler(fakeReq(request({ stream: true }), { 'x-agni-part': part }), res);
-    assert.equal(res.written, EVENTS.join(''), `part ${part} still streams in full`);
+    assert.equal(res.written, ': accepted\n\n' + EVENTS.join(''),
+                 `part ${part} is accepted first, then streams in full`);
     assert.equal(globalThis.fetch.calls.filter(c => c.url.includes('agni_consume')).length, charged,
                  `part ${part}`);
   }
@@ -161,4 +162,33 @@ test('the app hanging up stops the upstream answer, and costs no credit', async 
   await done;
   assert.ok(upstreamSignal.aborted, 'the upstream request was aborted');
   assert.equal(base.calls.filter(c => c.url.includes('agni_consume')).length, 0);
+});
+
+test('a part refused by the model ends as an error event, after the early 200', async () => {
+  const base = fakeFetch({ events: EVENTS });
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('api.anthropic.com')) {
+      return Response.json({ type: 'error', error: { type: 'overloaded_error' } }, { status: 529 });
+    }
+    return base(url, options);
+  };
+  const res = fakeRes();
+  await handler(fakeReq(request({ stream: true }), { 'x-agni-part': '2' }), res);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.written, /^: accepted\n\nevent: error\ndata: .*serviceUnavailable/);
+  assert.ok(res.ended);
+  assert.equal(base.calls.filter(c => c.url.includes('agni_consume')).length, 0);
+});
+
+test('the main call is not answered early: its refusals keep their status', async () => {
+  const base = fakeFetch({ events: EVENTS });
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('api.anthropic.com')) {
+      return Response.json({ type: 'error', error: { type: 'overloaded_error' } }, { status: 529 });
+    }
+    return base(url, options);
+  };
+  const res = fakeRes();
+  await handler(fakeReq(request({ stream: true })), res);
+  assert.equal(res.statusCode, 529);
 });

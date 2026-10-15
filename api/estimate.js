@@ -278,6 +278,28 @@ async function streamed(req, res, request, subject, quota, part = 0) {
   const hangUp = new AbortController();
   res.on('close', () => { if (!res.writableEnded) hangUp.abort(); });
 
+  // A PART IS ANSWERED BEFORE THE MODEL IS ASKED. The app signs parts one at
+  // a time and waits for each to be accepted before signing the next, because
+  // the replay counter must reach this server in the order it was signed.
+  // Verification is already done by here, so saying so now makes that wait
+  // half a second rather than the model's time to first word. The cost: a
+  // part's later failures arrive as an error event, not a status, which the
+  // app handles the same way (the part is dropped and the main call covers it).
+  const early = part > 0;
+  if (early) {
+    res.status(200);
+    res.setHeader('content-type', 'text/event-stream');
+    res.setHeader('cache-control', 'no-cache, no-transform');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+    res.write(': accepted\n\n');
+  }
+  const failEvent = (message) => {
+    res.write('event: error\ndata: ' + JSON.stringify({
+      type: 'error', error: { type: AgniError.serviceUnavailable, message }
+    }) + '\n\n');
+    return res.end();
+  };
+
   let upstream;
   try {
     upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -292,6 +314,7 @@ async function streamed(req, res, request, subject, quota, part = 0) {
     });
   } catch (error) {
     report('anthropic stream call', error);
+    if (early) return failEvent('Photo analysis is unavailable right now.');
     return fail(res, 503, AgniError.serviceUnavailable,
                 'Photo analysis is unavailable right now. You can log this meal by hand.');
   }
@@ -300,14 +323,20 @@ async function streamed(req, res, request, subject, quota, part = 0) {
   // error, passed through exactly as the buffered path does.
   if (!upstream.ok || !upstream.body) {
     const text = await upstream.text();
+    if (early) {
+      report('anthropic part refused', new Error(`${upstream.status}: ${text.slice(0, 200)}`));
+      return failEvent(`The model refused this part (${upstream.status}).`);
+    }
     res.status(upstream.status).setHeader('content-type', 'application/json');
     return res.send(text);
   }
 
-  res.status(200);
-  res.setHeader('content-type', 'text/event-stream');
-  res.setHeader('cache-control', 'no-cache, no-transform');
-  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  if (!early) {
+    res.status(200);
+    res.setHeader('content-type', 'text/event-stream');
+    res.setHeader('cache-control', 'no-cache, no-transform');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  }
 
   const decoder = new TextDecoder();
   let seen = '';
