@@ -30,6 +30,14 @@ const ALLOWED_MODELS = new Set([
 ]);
 const MAX_TOKENS_CAP = 4096;
 
+/// A streamed answer may be longer, and only a streamed one.
+///
+/// Raised on 2026-10-15 after a 13-dish plate ran out at 4096: the model's
+/// thinking counts against max_tokens, it spent nearly all of it thinking, and
+/// the JSON was cut off mid-dish. Kept to streams because a buffered answer
+/// that long would outrun UPSTREAM_TIMEOUT_MS and fail anyway, just later.
+const STREAM_MAX_TOKENS_CAP = 8192;
+
 /// THE LEGACY PATH, and its sunset.
 ///
 /// The shared token ships inside the app binary and anyone can extract it from
@@ -183,8 +191,9 @@ export function complimentaryLimit() {
 export function validateRequest(body) {
   if (!body || typeof body !== 'object') return 'Missing request body.';
   if (!ALLOWED_MODELS.has(body.model)) return `Model ${body.model} is not allowed.`;
-  if (typeof body.max_tokens !== 'number' || body.max_tokens > MAX_TOKENS_CAP) {
-    return `max_tokens must be a number no greater than ${MAX_TOKENS_CAP}.`;
+  const cap = body.stream === true ? STREAM_MAX_TOKENS_CAP : MAX_TOKENS_CAP;
+  if (typeof body.max_tokens !== 'number' || body.max_tokens > cap) {
+    return `max_tokens must be a number no greater than ${cap}.`;
   }
   if (!Array.isArray(body.messages) || body.messages.length !== 1) {
     return 'Expected exactly one message.';

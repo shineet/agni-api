@@ -114,3 +114,11 @@ test('a build that does not ask for a stream gets plain JSON, as before', async 
   assert.equal(res.headers['content-type'], 'application/json');
   assert.deepEqual(JSON.parse(res.written).content[0].text, '{"a":1}');
 });
+
+test('a stream may ask for up to 8192 tokens, a buffered call still only 4096', async () => {
+  const { validateRequest } = await import('../api/_lib.js');
+  assert.equal(validateRequest(request({ stream: true, max_tokens: 8000 })), null);
+  assert.match(validateRequest(request({ stream: true, max_tokens: 9000 })), /8192/);
+  assert.match(validateRequest(request({ max_tokens: 8000 })), /4096/);
+  assert.equal(validateRequest(request({ max_tokens: 4096 })), null);
+});
