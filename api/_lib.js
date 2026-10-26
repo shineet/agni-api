@@ -4,31 +4,10 @@
 
 export const FREE_LIMIT = Number(process.env.FREE_ESTIMATE_LIMIT || 50);
 
-/// Models this proxy will pay for. The app supplies the whole request body so
-/// the prompt lives in one place, which means the body is also untrusted: without
-/// this, anyone holding the app token could bill an expensive model to the key.
-///
-/// BOTH SPELLINGS OF HAIKU, and that is the point rather than an oversight.
-///
-/// The app sends the dated id. The list held only the bare alias, so every
-/// call using the fast model -- dish search, ingredient refinement, drink
-/// identification -- came back `400 Model claude-haiku-4-5-20251001 is not
-/// allowed.` Photo estimation uses the Sonnet id, which was on the list, so
-/// photographs worked and searching did not.
-///
-/// It stayed hidden because a personal API key skips this proxy entirely and
-/// goes straight to Anthropic, where the dated id is perfectly valid. The one
-/// person who could not reproduce it was the only person with a key: it was
-/// broken for every tester without one.
-///
-/// Carrying both means neither side can break the other by picking a different
-/// spelling of the same model again.
-const ALLOWED_MODELS = new Set([
-  'claude-sonnet-5',
-  'claude-haiku-4-5',
-  'claude-haiku-4-5-20251001',
-]);
-const MAX_TOKENS_CAP = 4096;
+/// The model allowlist and the request shape now live in _billing.js
+/// (ALLOWED_MODELS, validateModelRequest), with the per-feature rules. Both
+/// spellings of Haiku are still on it, for the reason recorded there: the app
+/// sends the dated id and a list holding only the alias broke every search.
 
 /// THE LEGACY PATH, and its sunset.
 ///
@@ -117,10 +96,14 @@ export const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 1_500_000);
 ///                    legitimate minute, and it stops a script immediately.
 ///   per hour    60   an active hour, four meals with corrections, is about 15.
 ///   per day    100   a heavy user is 25 to 30.
-///   spend    $1.00   a normal user costs $0.07 to $0.13 a day, heavy about
-///                    $0.40. Bounds the worst case 100 calls could reach.
-///   global   $25.00  untouchable at current scale. It exists so a bug or an
-///                    attack cannot produce an open-ended bill overnight.
+///
+/// THE TWO SPEND FIGURES BELOW ARE NO LONGER ENFORCED HERE. They summed a
+/// cost the app reported about itself, and the global one took photo analysis
+/// away from everybody, paying or not, at roughly 270 typical subscribers.
+/// Money is now reserved and settled per call in agni_reserve, from usage the
+/// server reads itself, against per-user allowances and an operator-set
+/// ceiling (schema-billing.sql). They stay exported only for the tests that
+/// pin their old defaults.
 export const LIMITS = {
   perMinute: Number(process.env.RATE_PER_MINUTE || 10),
   perHour: Number(process.env.RATE_PER_HOUR || 60),
@@ -129,7 +112,8 @@ export const LIMITS = {
   globalDaySpendUSD: Number(process.env.GLOBAL_DAY_SPEND_CAP_USD || 25.0)
 };
 
-/// List pricing, so the cost of a finished call can be recorded.
+/// List pricing, superseded by _billing.js costFromUsage, which also counts
+/// prompt-cache reads and writes and web searches. Kept for its tests.
 const PRICING = {
   'claude-sonnet-5': { input: 2.0, output: 10.0 },
   'claude-haiku-4-5': { input: 1.0, output: 5.0 }
@@ -178,18 +162,6 @@ export function refusal(reason) {
 
 export function complimentaryLimit() {
   return Number(process.env.FREE_AI_ANALYSES || 3);
-}
-
-export function validateRequest(body) {
-  if (!body || typeof body !== 'object') return 'Missing request body.';
-  if (!ALLOWED_MODELS.has(body.model)) return `Model ${body.model} is not allowed.`;
-  if (typeof body.max_tokens !== 'number' || body.max_tokens > MAX_TOKENS_CAP) {
-    return `max_tokens must be a number no greater than ${MAX_TOKENS_CAP}.`;
-  }
-  if (!Array.isArray(body.messages) || body.messages.length !== 1) {
-    return 'Expected exactly one message.';
-  }
-  return null;
 }
 
 /// Accepts either form Supabase shows you: the bare project URL from Settings,
@@ -269,6 +241,54 @@ export async function cachedVariants(key) {
 
 export async function cacheVariants(key, variants) {
   await supabaseRPC('agni_cache_variants', { p_key: key, p_payload: variants });
+}
+
+/// Reads the body as the bytes that arrived, refusing anything oversized.
+///
+/// TWO CHECKS, and the second is the one that matters. Content-Length is read
+/// first so an obviously huge request is refused before a byte of it is
+/// accepted. But a caller writes that header, so it is also enforced while
+/// streaming: a request that lies about its size, or omits the header
+/// altogether, is cut off the moment it exceeds the cap rather than being
+/// believed.
+///
+/// Every route that verifies an assertion reads its body this way, with
+/// `export const config = { api: { bodyParser: false } }`: a parsed body
+/// cannot be hashed, because re-serialising it produces different bytes from
+/// the ones that were signed.
+export async function readRawBody(req, limit = MAX_BODY_BYTES) {
+  if (req.method === 'GET' || req.method === 'HEAD') return Buffer.alloc(0);
+  const declared = Number(req.headers['content-length'] || 0);
+  if (declared > limit) {
+    const error = new Error('body too large');
+    error.tooLarge = true;
+    throw error;
+  }
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > limit) {
+      const error = new Error('body too large');
+      error.tooLarge = true;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+/// The raw body and its JSON, for routes whose bodies are small.
+export async function readJSONBody(req, limit = 256_000) {
+  const raw = await readRawBody(req, limit);
+  if (raw.length === 0) return { raw, body: {} };
+  try {
+    return { raw, body: JSON.parse(raw.toString('utf8')) };
+  } catch {
+    const error = new Error('body is not JSON');
+    error.notJSON = true;
+    throw error;
+  }
 }
 
 export function json(res, status, body) {

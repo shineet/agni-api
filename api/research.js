@@ -1,5 +1,12 @@
-import { json, report, costOfUsage } from './_lib.js';
-import { authenticate, recordAuth, MeterClass } from './_auth.js';
+import { randomUUID } from 'node:crypto';
+import { json, report, readJSONBody } from './_lib.js';
+import { authenticate, recordAuth, MeterClass, researchEnabled } from './_auth.js';
+import {
+  cleanId, metered, allowanceRefusal, sendRefusal, reservationForServerCall
+} from './_billing.js';
+import { resolveCaller, entitlementRefusal, limitsFor } from './_caller.js';
+import { supabaseRPC } from './_supabase.js';
+import { companionHandler } from './_companion.js';
 
 /// Ask a model what a food IS, and what goes into it.
 ///
@@ -17,13 +24,18 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 /// arithmetic becomes Agni's. RecipeCalculator prices the ingredients, exactly
 /// as it does for a curated dish.
 ///
-/// Metered on research. POST { query, hint }.
+/// POST { query, retrieve, installId, actionId, requestId }.
+///
+/// METERED LIKE EVERY OTHER PAID ROUTE. It used to compute cost_usd, put it in
+/// the response and charge it to nothing: the app called it with the shared
+/// token, which skips every limit, and the research gate was only ever handed
+/// a cost of zero. Now it reserves against the caller's search allowance and
+/// the day's ceiling, settles to the real usage, and shares one credit with
+/// the variant search that the same keystroke may go on to make (same action
+/// id). A shared cache answers repeats for nothing.
 const MODEL = process.env.RESEARCH_MODEL || 'claude-haiku-4-5';
 const UPSTREAM_TIMEOUT_MS = 20000;
 const RETRIEVAL_TIMEOUT_MS = 45000;
-/// $10 per 1,000 searches, published. Recorded per call so the cost of a
-/// retrieval is a measured number rather than an estimate in a report.
-const SEARCH_COST_USD = 0.01;
 
 const SYSTEM = `You identify foods for a nutrition app.
 
@@ -157,10 +169,30 @@ function citationsFrom(payload) {
   }).slice(0, 8);
 }
 
+/// A parsed body cannot be hashed for the assertion.
+export const config = { api: { bodyParser: false } };
+
+/// Repeats are common ("chicken biryani") and the answer does not depend on
+/// who asked. Thirty days, then asked afresh.
+const CACHE_TTL_SECONDS = 30 * 86400;
+
+function cacheKey(query, retrieve) {
+  return String(query).toLowerCase().normalize('NFKD')
+    .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + (retrieve ? '|r' : '|m');
+}
+
 export default async function handler(req, res) {
+  // /api/companion lands here (vercel.json): the twelve-function limit.
+  if (req.query?.op === 'companion') return companionHandler(req, res);
   if (req.method !== 'POST') return json(res, 405, { error: 'POST only.' });
 
-  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '');
+  let rawBody, body;
+  try {
+    ({ raw: rawBody, body } = await readJSONBody(req));
+  } catch {
+    return json(res, 400, { error: 'unreadable body' });
+  }
+
   const auth = await authenticate(req, {
     meterClass: MeterClass.research,
     path: '/api/research',
@@ -173,87 +205,153 @@ export default async function handler(req, res) {
     return json(res, auth.status || 401, { error: 'Unauthorized' });
   }
 
+  // The research kill switch covers this route as well as ingredient.
+  if (!researchEnabled()) return json(res, 503, { error: 'unavailable', reason: 'not_configured' });
   if (!process.env.ANTHROPIC_API_KEY) {
     report('research', new Error('ANTHROPIC_API_KEY is not set'));
     return json(res, 503, { error: 'unavailable', reason: 'not_configured' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const query = String(body.query || '').trim().slice(0, 200);
   if (query.length < 2) return json(res, 400, { error: 'query too short' });
   // RETRIEVAL IS ASKED FOR, NEVER ASSUMED. The resolver decides when looking
   // something up materially increases trust; this endpoint does not guess.
   const retrieve = body.retrieve === true;
 
-  const started = Date.now();
-  let upstream;
+  let caller;
   try {
-    upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: retrieve ? 2000 : 900,
-        temperature: 0,
-        system: retrieve ? RETRIEVAL_SYSTEM : SYSTEM,
-        ...(retrieve ? {
-          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]
-        } : {}),
-        messages: [{ role: 'user', content: query }]
-      }),
-      signal: AbortSignal.timeout(retrieve ? RETRIEVAL_TIMEOUT_MS : UPSTREAM_TIMEOUT_MS)
-    });
+    caller = await resolveCaller(auth, { installId: body.installId });
   } catch (error) {
-    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
-    report('research', error);
-    return json(res, 503, { error: 'unavailable', reason: timedOut ? 'timeout' : 'upstream' });
+    report('research caller', error);
+    return json(res, 503, { error: 'unavailable', reason: 'upstream' });
+  }
+  // RETRIEVAL IS A WEB LOOKUP, whoever asks for it. No shipping build sends
+  // retrieve:true, but the server cannot assume that: up to three web searches
+  // billed as one ordinary AI search would make the search bucket the cheap
+  // way into the dear one. It draws on, and is entitled like, the web bucket.
+  const entitlement = entitlementRefusal(caller, retrieve ? 'ingredient' : 'research');
+  if (entitlement) return sendRefusal(res, entitlement);
+
+  const started = Date.now();
+  const key = cacheKey(query, retrieve);
+  try {
+    const hit = await supabaseRPC('agni_research_cache_get', { p_key: key });
+    if (hit && typeof hit === 'object' && hit.identity) {
+      res.setHeader('cache-control', 'no-store');
+      // NOTHING WAS SPENT, and the numbers say so.
+      return json(res, 200, { ...hit, cost_usd: 0, search_operations: 0, cached: true,
+                              took_ms: Date.now() - started, model: MODEL });
+    }
+  } catch (error) {
+    // The cache is an optimisation, never a dependency.
   }
 
-  if (upstream.status === 429) {
-    return json(res, 429, { error: 'unavailable', reason: 'rate_limited' });
-  }
-  if (!upstream.ok) {
-    report('research', new Error(`anthropic returned ${upstream.status}`));
+  const requestId = cleanId(body.requestId) || randomUUID();
+  const actionId = cleanId(body.actionId) || requestId;
+  const maxTokens = retrieve ? 2000 : 900;
+  const system = retrieve ? RETRIEVAL_SYSTEM : SYSTEM;
+  const reserveUSD = reservationForServerCall({
+    model: MODEL, system, user: query, maxTokens, maxSearches: retrieve ? 3 : 0
+  });
+
+  let result;
+  try {
+    result = await metered({
+      subject: caller.subject, subjectKind: caller.subjectKind, tier: caller.tier,
+      budgetTier: caller.budgetTier,
+      authPath: auth.path, feature: 'research', bucket: retrieve ? 'web' : 'search', counts: true,
+      actionId, requestId, model: MODEL, period: caller.period, reserveUSD,
+      limits: limitsFor(caller)
+    }, async () => {
+      let upstream;
+      try {
+        upstream = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: maxTokens,
+            temperature: 0,
+            system,
+            ...(retrieve ? {
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]
+            } : {}),
+            messages: [{ role: 'user', content: query }]
+          }),
+          signal: AbortSignal.timeout(retrieve ? RETRIEVAL_TIMEOUT_MS : UPSTREAM_TIMEOUT_MS)
+        });
+      } catch (error) {
+        const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+        return { ok: false, ambiguous: true, reason: timedOut ? 'timeout' : 'upstream' };
+      }
+      if (!upstream.ok) {
+        return { ok: false, httpStatus: upstream.status, providerRequestId: upstream.headers.get('request-id') };
+      }
+      let payload;
+      try { payload = await upstream.json(); }
+      catch { return { ok: false, ambiguous: true, httpStatus: 200, reason: 'malformed' }; }
+      const parsed = parseAnswer(payload);
+      // Billed either way; only a usable answer keeps the credit.
+      return { ok: !!parsed, httpStatus: 200, usage: payload?.usage || null, payload, parsed,
+               label: parsed ? 'ok' : 'malformed',
+               providerRequestId: upstream.headers.get('request-id') };
+    });
+  } catch (error) {
+    report('research metering', error);
     return json(res, 503, { error: 'unavailable', reason: 'upstream' });
   }
 
-  let payload;
-  try {
-    payload = await upstream.json();
-  } catch (error) {
-    return json(res, 503, { error: 'unavailable', reason: 'malformed' });
+  if (result.refused) {
+    return sendRefusal(res, allowanceRefusal(result.refused,
+      { tier: caller.tier, bucket: 'search', limit: result.limit }));
   }
+  const { outcome } = result;
+  if (outcome.httpStatus === 429) return json(res, 429, { error: 'unavailable', reason: 'rate_limited' });
+  if (!outcome.httpStatus) return json(res, 503, { error: 'unavailable', reason: outcome.reason || 'upstream' });
+  if (outcome.httpStatus !== 200) {
+    report('research', new Error(`anthropic returned ${outcome.httpStatus}`));
+    return json(res, 503, { error: 'unavailable', reason: 'upstream' });
+  }
+  if (!outcome.parsed) return json(res, 503, { error: 'unavailable', reason: 'malformed' });
 
-  const text = (payload?.content || []).filter(part => part.type === 'text')
-    .map(part => part.text).join('').trim();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    return json(res, 503, { error: 'unavailable', reason: 'malformed' });
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch (error) {
-    return json(res, 503, { error: 'unavailable', reason: 'malformed' });
-  }
-
-  const result = shape(parsed);
+  const payload = outcome.payload;
+  const answer = shape(outcome.parsed);
   const searches = Number(payload?.usage?.server_tool_use?.web_search_requests || 0);
   const citations = retrieve ? citationsFrom(payload) : [];
   // EVIDENCE IS WHAT WAS RETRIEVED, NOT WHAT WAS ASKED FOR. A retrieval that
   // searched and found nothing citable is model knowledge with a bigger bill,
   // and is labelled as such rather than as research.
-  result.evidence = citations.length > 0 ? 'retrieval_backed' : 'model_knowledge';
-  result.citations = citations;
-  result.search_operations = searches;
-  result.cost_usd = costOfUsage(MODEL, payload?.usage) + searches * SEARCH_COST_USD;
-  result.took_ms = Date.now() - started;
-  result.model = MODEL;
+  answer.evidence = citations.length > 0 ? 'retrieval_backed' : 'model_knowledge';
+  answer.citations = citations;
+
+  supabaseRPC('agni_research_cache_put', {
+    p_key: key, p_payload: answer, p_ttl_seconds: CACHE_TTL_SECONDS
+  }).catch(() => {});
+
+  answer.search_operations = searches;
+  // The cost the ledger recorded, computed from usage, for the in-app ledger.
+  answer.cost_usd = result.actualUSD;
+  answer.cached = false;
+  answer.took_ms = Date.now() - started;
+  answer.model = MODEL;
   res.setHeader('cache-control', 'no-store');
-  return json(res, 200, result);
+  return json(res, 200, answer);
+}
+
+/// The JSON object in the model's text, or null.
+function parseAnswer(payload) {
+  const text = (payload?.content || []).filter(part => part.type === 'text')
+    .map(part => part.text).join('').trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 }

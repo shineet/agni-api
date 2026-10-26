@@ -19,6 +19,9 @@ alter table agni_attest_keys add column if not exists hour_start    timestamptz 
 alter table agni_attest_keys add column if not exists day_count     integer not null default 0;
 alter table agni_attest_keys add column if not exists day_start     timestamptz not null default now();
 alter table agni_attest_keys add column if not exists day_spend_usd numeric(10,5) not null default 0;
+-- The last 16 counters seen, so an out-of-order arrival is accepted and an
+-- exact repeat is not (see agni_attest_gate).
+alter table agni_attest_keys add column if not exists recent_counters bigint[] not null default '{}';
 
 -- Global state: one row, so a bug or an attack cannot produce an open-ended
 -- bill overnight even if every per-key limit is somehow satisfied.
@@ -102,7 +105,15 @@ begin
 
   -- REPLAY FIRST, before any limit. A request that cannot prove it is fresh is
   -- not a request, and must not consume anybody's allowance.
-  if p_counter <= k.counter then
+  -- OUT-OF-ORDER ARRIVALS ARE NOT REPLAYS. A phone signing several requests
+  -- at once (a search firing its lookups together) gives them counters n,
+  -- n+1, n+2 that can reach the server in any order; demanding strictly
+  -- increasing arrival refused the slower ones as replays. Replay is already
+  -- impossible here: every assertion signs a single-use challenge that
+  -- agni_attest_begin claimed before this ran. So a counter up to 16 below the
+  -- highest seen is accepted, an exact repeat of one of the last 16 is still
+  -- refused, and the stored counter only ever rises.
+  if p_counter <= k.counter - 16 or p_counter = any(k.recent_counters) then
     return query select false, 'replay'::text, 0;
     return;
   end if;
@@ -135,7 +146,9 @@ begin
   -- presented a valid, fresh assertion, and letting its counter be reused would
   -- reopen the replay window that refusal just closed.
   update agni_attest_keys
-     set counter       = p_counter,
+     set counter       = greatest(k.counter, p_counter),
+         recent_counters = (select array_agg(c order by c desc) from
+                             (select c from unnest(k.recent_counters || p_counter) c order by c desc limit 16) s),
          last_seen     = now_ts,
          minute_count  = k.minute_count + 1,
          minute_start  = k.minute_start,

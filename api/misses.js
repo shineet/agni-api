@@ -1,4 +1,4 @@
-import { json, report, reportMiss } from './_lib.js';
+import { readJSONBody, json, report, reportMiss } from './_lib.js';
 import { authenticate, recordAuth, MeterClass } from './_auth.js';
 
 /// What Agni did not know, from every phone.
@@ -9,7 +9,19 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 /// the one person deciding what to build next.
 ///
 ///   POST /api/misses { misses: [...] }   header x-agni-install
+/// Read raw: an assertion is bound to the bytes that arrived, and a parsed
+/// body re-serialises to different ones.
+export const config = { api: { bodyParser: false } };
+
 export default async function handler(req, res) {
+  let rawBody, body;
+  try {
+    ({ raw: rawBody, body } = await readJSONBody(req));
+  } catch {
+    json(res, 400, { error: 'Unreadable body.' });
+    return;
+  }
+
   // ATTESTATION FIRST, LEGACY STILL ACCEPTED. Backwards compatible by
   // construction: the only change here is additional acceptance, so every
   // client already in the field keeps working unchanged. Metered on the READ
@@ -19,7 +31,7 @@ export default async function handler(req, res) {
     meterClass: MeterClass.read,
     path: '/api/misses',
     query: req.query || {},
-    rawBody: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '')
+    rawBody
   });
   recordAuth('misses', auth, req);
   if (!auth.ok) {
@@ -38,7 +50,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const submitted = Array.isArray(req.body?.misses) ? req.body.misses : [];
+  const submitted = Array.isArray(body?.misses) ? body.misses : [];
   if (!submitted.length) {
     json(res, 200, { accepted: 0 });
     return;

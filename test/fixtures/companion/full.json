@@ -1,0 +1,10 @@
+{"v":1,"generatedAt":"__NOW__","localDate":"2026-10-07","localTime":"18:40","timeZone":"America/Chicago",
+ "units":{"energy":"kcal","mass":"g","sleep":"hours","distance":"km"},
+ "forYouNow":{"headline":"Your movement matched a lower-Recovery day so far.","asOf":"provisional","stage":"afternoon",
+   "action":{"headline":"Keep the rest of today easy","detail":"Recovery is below your usual, and you already trained this morning."}},
+ "reading":{"state":"wellMatched","confidence":"moderate","opportunities":["easierDay"],"limits":[]},
+ "food":{"eatenKcal":1420,"budgetKcal":2050,"proteinG":78,"proteinTargetG":120,"mealsLogged":3,"loggedSlots":["breakfast","lunch","snack"],"skippedSlots":[],"logging":"complete","lastMealAt":"2026-10-07T16:10:00-05:00","quality":"moderate"},
+ "movement":{"activeKcal":610,"activeTargetKcal":550,"steps":9200,"stepTarget":8000,"exerciseMinutes":52,"workedOutToday":true,"sessions":1,"coverage":"full","quality":"wellMatched"},
+ "sleep":{"lastNightHours":5.9,"targetHours":7.5},
+ "recovery":{"state":"underStrain","confidence":"high","belowNormal":["HRV","sleep"],"computedAt":"2026-10-07T07:05:00-05:00"},
+ "missing":[]}

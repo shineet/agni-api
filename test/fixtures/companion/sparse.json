@@ -1,0 +1,9 @@
+{"v":1,"generatedAt":"__NOW__","localDate":"2026-10-07","localTime":"20:30","timeZone":"America/Chicago",
+ "units":{"energy":"kcal","mass":"g","sleep":"hours","distance":"km"},
+ "forYouNow":{"headline":"Agni can't read food today: only one meal is logged.","asOf":"settled","stage":"evening","question":"Did you eat lunch today?"},
+ "reading":{"state":"insufficientFood","confidence":"low","opportunities":[],"limits":["sparseFood"]},
+ "food":{"eatenKcal":450,"budgetKcal":2050,"proteinG":15,"proteinTargetG":120,"mealsLogged":1,"loggedSlots":["breakfast"],"skippedSlots":[],"logging":"sparse"},
+ "movement":{"activeKcal":420,"activeTargetKcal":550,"steps":7100,"stepTarget":8000,"exerciseMinutes":20,"workedOutToday":false,"sessions":0,"coverage":"full","quality":"typical"},
+ "sleep":{"lastNightHours":7.4,"targetHours":7.5},
+ "recovery":{"state":"normal","confidence":"moderate","belowNormal":[],"computedAt":"2026-10-07T07:00:00-05:00"},
+ "missing":["most of today's meals"]}

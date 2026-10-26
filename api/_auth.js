@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { authorised, legacyTokenEnabled, LIMITS, report } from './_lib.js';
 import { verifyAssertion } from './_attest.js';
 import { supabaseRPC } from './_supabase.js';
+import { hashIP } from './_billing.js';
 
 /// One door for every endpoint, and three different allowances behind it.
 ///
@@ -69,7 +70,18 @@ export function canonicalRequest(method, path, query, rawBody) {
 /// Returns the key id and the advanced counter, or null when the request
 /// carries no attestation headers at all, which is the ordinary case for an
 /// older client and is not an error.
-async function verify(req, canonical) {
+///
+/// THE CHALLENGE MUST HAVE BEEN CLAIMED BY THIS CALL AND THE KEY MUST NOT BE
+/// REVOKED. estimate.js checked both; this shared path, which research,
+/// ingredient and every read route use, checked neither, so a revoked key or
+/// a reused challenge passed here. agni_attest_begin already returns both.
+///
+/// `rawBodyBinding` accepts the ORIGINAL estimate binding,
+/// SHA256(challenge) || SHA256(body), which builds 174 and 175 sign. Only
+/// /api/estimate passes it; every other route has only ever been bound to the
+/// canonical request.
+const COUNTER_WINDOW = 16;
+async function verify(req, canonical, { rawBody = '', rawBodyBinding = false } = {}) {
   const keyId = req.headers['x-agni-key-id'];
   const assertion = req.headers['x-agni-assertion'];
   const challenge = req.headers['x-agni-challenge'];
@@ -80,34 +92,55 @@ async function verify(req, canonical) {
   });
   const record = Array.isArray(rows) ? rows[0] : rows;
   if (!record) throw new Error('key is not registered');
+  if (!record.claimed) throw new Error('challenge was stale or already used');
+  if (record.revoked) throw new Error('key is revoked');
 
-  const clientData = Buffer.concat([
-    Buffer.from(challenge, 'base64'),
-    createHash('sha256').update(canonical).digest()
-  ]);
+  const challengeBytes = Buffer.from(challenge, 'base64');
+  const bindings = [createHash('sha256').update(canonical).digest()];
+  if (rawBodyBinding) bindings.push(createHash('sha256').update(rawBody || '').digest());
 
-  const { counter } = verifyAssertion({
-    assertionBase64: assertion,
-    clientData,
-    publicKeyPem: record.public_key_pem,
-    storedCounter: Number(record.counter)
-  });
+  let counter = null;
+  let lastError = null;
+  for (const binding of bindings) {
+    try {
+      ({ counter } = verifyAssertion({
+        assertionBase64: assertion,
+        clientData: Buffer.concat([challengeBytes, binding]),
+        publicKeyPem: record.public_key_pem,
+        // The same out-of-order window the gates allow (see schema-limits.sql):
+        // replay is stopped by the single-use challenge claimed above.
+        storedCounter: Number(record.counter) - COUNTER_WINDOW
+      }));
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (counter === null) throw lastError || new Error('assertion did not verify');
 
-  return { keyId, counter, environment: record.environment };
+  return { keyId, counter, environment: record.environment, unlimited: !!record.unlimited };
 }
 
 /// Applies the allowance for one class.
-async function meter(keyId, counter, meterClass, previousCostUSD) {
+///
+/// SPEND IS NO LONGER COUNTED HERE. These gates keep doing what they are good
+/// at -- the replay counter and the per-minute, per-hour and per-day call
+/// windows -- and money moved to agni_reserve, which knows what a call really
+/// cost. So the client-reported cost is gone (always 0) and the old spend caps
+/// are passed as unreachable, which leaves the SQL untouched and every shipped
+/// build's verification exactly as it was.
+const NO_CAP = 1e9;
+async function meter(keyId, counter, meterClass) {
   if (meterClass === MeterClass.ai) {
     const verdict = await supabaseRPC('agni_attest_gate', {
       p_key_id: keyId,
       p_counter: counter,
-      p_previous_cost_usd: previousCostUSD || 0,
+      p_previous_cost_usd: 0,
       p_per_minute: LIMITS.perMinute,
       p_per_hour: LIMITS.perHour,
       p_per_day: LIMITS.perDay,
-      p_day_spend_cap: LIMITS.daySpendUSD,
-      p_global_day_cap: LIMITS.globalDaySpendUSD
+      p_day_spend_cap: NO_CAP,
+      p_global_day_cap: NO_CAP
     });
     const gate = Array.isArray(verdict) ? verdict[0] : verdict;
     if (!gate) throw new Error('gate returned nothing');
@@ -133,13 +166,11 @@ async function meter(keyId, counter, meterClass, previousCostUSD) {
     p_per_day: meterClass === MeterClass.read
       ? Number(process.env.READ_PER_DAY || 4000)
       : Number(process.env.RESEARCH_PER_DAY || 120),
-    p_previous_cost_usd: previousCostUSD || 0,
-    p_day_spend_cap: meterClass === MeterClass.research
-      ? Number(process.env.RESEARCH_DAY_SPEND_CAP_USD || 0.25)
-      : 0,
-    p_global_day_cap: meterClass === MeterClass.research
-      ? Number(process.env.RESEARCH_GLOBAL_DAY_CAP_USD || 5.0)
-      : 0
+    p_previous_cost_usd: 0,
+    // 0 switches the old research spend caps off in the SQL; agni_reserve
+    // meters research and ingredient spend now, from real usage.
+    p_day_spend_cap: 0,
+    p_global_day_cap: 0
   });
   const gate = Array.isArray(verdict) ? verdict[0] : verdict;
   if (!gate) throw new Error('class gate returned nothing');
@@ -161,49 +192,73 @@ export function researchEnabled() {
 /// Nothing that works now stops working, because the only change is additional
 /// acceptance. New endpoints pass `allowLegacy: false` and are attested from
 /// birth, so no fresh surface is ever added to the token being retired.
+///
+/// `rawBody` MUST BE THE BYTES THAT ARRIVED. Every route used to pass
+/// `JSON.stringify(req.body ?? '')`, which re-serialises a POST (so an
+/// attested POST could never verify) and turns an empty GET body into the two
+/// characters `""` (so an attested GET could never verify either). Nothing
+/// attested those routes yet, which is the only reason it went unseen.
+///
+/// The legacy path is rate limited per IP: the token is in every IPA and an
+/// unthrottled shared secret is an open door.
 export async function authenticate(req, {
   meterClass = MeterClass.read,
   allowLegacy = true,
   rawBody = '',
-  previousCostUSD = 0,
+  rawBodyBinding = false,
   path = '',
   query = {}
 } = {}) {
   const canonical = canonicalRequest(req.method, path, query, rawBody);
+  const ipHash = hashIP(req);
 
   let verified = null;
   try {
-    verified = await verify(req, canonical);
+    verified = await verify(req, canonical, { rawBody, rawBodyBinding });
   } catch (error) {
     report('attestation', error);
-    return { ok: false, path: AuthPath.refused, status: 401, reason: 'verification' };
+    return { ok: false, path: AuthPath.refused, status: 401, reason: 'verification', ipHash };
   }
 
   if (!verified) {
     if (allowLegacy && legacyTokenEnabled() && authorised(req)) {
-      return { ok: true, path: AuthPath.legacy, keyId: null, meterClass };
+      let inside = true;
+      try {
+        inside = await supabaseRPC('agni_ip_window', {
+          p_bucket: 'legacy', p_ip_hash: ipHash, p_window_seconds: 600,
+          p_limit: Number(process.env.LEGACY_PER_IP_10MIN || 300)
+        });
+      } catch (error) {
+        // The window table is a guard, not a dependency.
+        report('legacy window', error);
+      }
+      if (inside === false) {
+        return { ok: false, path: AuthPath.legacy, status: 429, reason: 'minute', retryAfter: 60, meterClass, ipHash };
+      }
+      return { ok: true, path: AuthPath.legacy, keyId: null, meterClass, ipHash };
     }
-    return { ok: false, path: AuthPath.refused, status: 401, reason: 'unverified' };
+    return { ok: false, path: AuthPath.refused, status: 401, reason: 'unverified', ipHash };
   }
 
   let gate;
   try {
-    gate = await meter(verified.keyId, verified.counter, meterClass, previousCostUSD);
+    gate = await meter(verified.keyId, verified.counter, meterClass);
   } catch (error) {
     report('metering', error);
-    return { ok: false, path: AuthPath.refused, status: 401, reason: 'metering' };
+    return { ok: false, path: AuthPath.refused, status: 401, reason: 'metering', ipHash };
   }
 
   if (!gate.allowed) {
     return {
       ok: false, path: AuthPath.attested, keyId: verified.keyId, meterClass,
-      status: 429, reason: gate.reason, retryAfter: gate.retry_after || 0
+      status: gate.reason === 'replay' || gate.reason === 'unknown_key' ? 401 : 429,
+      reason: gate.reason, retryAfter: gate.retry_after || 0, ipHash
     };
   }
 
   return {
     ok: true, path: AuthPath.attested, keyId: verified.keyId,
-    environment: verified.environment, meterClass
+    environment: verified.environment, meterClass, ipHash
   };
 }
 

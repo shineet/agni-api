@@ -1,4 +1,4 @@
-import { json, report, searchDishes, submitDish } from './_lib.js';
+import { readJSONBody, json, report, searchDishes, submitDish } from './_lib.js';
 import { authenticate, recordAuth, MeterClass } from './_auth.js';
 
 /// The shared dish table, both halves on one endpoint.
@@ -9,7 +9,19 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 ///
 /// GET  ?q=kothu           search dishes other people have added
 /// POST { dishes: [...] }  contribute, silently
+/// Read raw: an assertion is bound to the bytes that arrived, and a parsed
+/// body re-serialises to different ones.
+export const config = { api: { bodyParser: false } };
+
 export default async function handler(req, res) {
+  let rawBody, body;
+  try {
+    ({ raw: rawBody, body } = await readJSONBody(req));
+  } catch {
+    json(res, 400, { error: 'Unreadable body.' });
+    return;
+  }
+
   // ATTESTATION FIRST, LEGACY STILL ACCEPTED. Backwards compatible by
   // construction: the only change here is additional acceptance, so every
   // client already in the field keeps working unchanged. Metered on the READ
@@ -19,7 +31,7 @@ export default async function handler(req, res) {
     meterClass: MeterClass.read,
     path: '/api/dishes',
     query: req.query || {},
-    rawBody: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '')
+    rawBody
   });
   recordAuth('dishes', auth, req);
   if (!auth.ok) {
@@ -58,7 +70,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const submitted = Array.isArray(req.body?.dishes) ? req.body.dishes : [];
+    const submitted = Array.isArray(body?.dishes) ? body.dishes : [];
     if (!submitted.length) {
       json(res, 200, { accepted: 0 });
       return;

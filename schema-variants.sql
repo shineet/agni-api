@@ -78,5 +78,6 @@ begin
 end;
 $$;
 
-grant execute on function agni_cached_variants(text) to anon, authenticated;
-grant execute on function agni_cache_variants(text, jsonb) to anon, authenticated;
+-- NO LONGER GRANTED TO ANON (2026-10-08). The app never called these directly;
+-- the server does, with the service role. Anon could poison the cache every
+-- user is served. schema-lockdown.sql revokes it.

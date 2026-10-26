@@ -68,7 +68,15 @@ begin
 
   -- Replay first, before any allowance. A request that cannot prove it is fresh
   -- is not a request and must not consume anybody's budget.
-  if p_counter <= k.counter then
+  -- OUT-OF-ORDER ARRIVALS ARE NOT REPLAYS. A phone signing several requests
+  -- at once (a search firing its lookups together) gives them counters n,
+  -- n+1, n+2 that can reach the server in any order; demanding strictly
+  -- increasing arrival refused the slower ones as replays. Replay is already
+  -- impossible here: every assertion signs a single-use challenge that
+  -- agni_attest_begin claimed before this ran. So a counter up to 16 below the
+  -- highest seen is accepted, an exact repeat of one of the last 16 is still
+  -- refused, and the stored counter only ever rises.
+  if p_counter <= k.counter - 16 or p_counter = any(k.recent_counters) then
     return query select false, 'replay'::text, 0;
     return;
   end if;
@@ -111,13 +119,17 @@ begin
   -- reused would reopen the window the refusal just closed.
   if p_class = 'read' then
     update agni_attest_keys
-       set counter = p_counter, last_seen = now_ts,
+       set counter = greatest(k.counter, p_counter), last_seen = now_ts,
+           recent_counters = (select array_agg(c order by c desc) from
+                               (select c from unnest(k.recent_counters || p_counter) c order by c desc limit 16) s),
            read_minute_count = m_count + 1, read_minute_start = m_start,
            read_day_count = d_count + 1,    read_day_start = d_start
      where key_id = p_key_id;
   else  -- research, and only research: every other class returned above
     update agni_attest_keys
-       set counter = p_counter, last_seen = now_ts,
+       set counter = greatest(k.counter, p_counter), last_seen = now_ts,
+           recent_counters = (select array_agg(c order by c desc) from
+                               (select c from unnest(k.recent_counters || p_counter) c order by c desc limit 16) s),
            research_minute_count = m_count + 1, research_minute_start = m_start,
            research_day_count = d_count + 1,    research_day_start = d_start,
            research_day_spend_usd = d_spend

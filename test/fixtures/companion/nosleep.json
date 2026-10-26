@@ -1,0 +1,9 @@
+{"v":1,"generatedAt":"__NOW__","localDate":"2026-10-07","localTime":"09:15","timeZone":"America/Chicago",
+ "units":{"energy":"kcal","mass":"g","sleep":"hours","distance":"km"},
+ "forYouNow":{"headline":"Still getting a read on today.","asOf":"provisional","stage":"morning","detail":"Agni doesn't have last night's sleep or a Recovery reading yet."},
+ "reading":{"state":"tooEarly","confidence":"low","opportunities":[],"limits":["noRecovery","noSleep"]},
+ "food":{"eatenKcal":380,"budgetKcal":2050,"proteinG":22,"proteinTargetG":120,"mealsLogged":1,"loggedSlots":["breakfast"],"skippedSlots":[],"logging":"partial"},
+ "movement":{"activeKcal":90,"activeTargetKcal":550,"steps":1500,"stepTarget":8000,"exerciseMinutes":0,"workedOutToday":false,"sessions":0,"coverage":"partial"},
+ "sleep":{"lastNightHours":null,"targetHours":7.5},
+ "recovery":null,
+ "missing":["sleep last night","recovery reading"]}

@@ -1,6 +1,11 @@
-import { json, report, costOfUsage } from './_lib.js';
+import { randomUUID } from 'node:crypto';
+import { json, report, readJSONBody } from './_lib.js';
 import { authenticate, recordAuth, MeterClass, researchEnabled } from './_auth.js';
 import { supabaseRPC } from './_supabase.js';
+import {
+  cleanId, metered, allowanceRefusal, sendRefusal, reservationForServerCall
+} from './_billing.js';
+import { resolveCaller, entitlementRefusal, limitsFor } from './_caller.js';
 
 /// Look up what one INGREDIENT contains, on the public web, with sources.
 ///
@@ -28,12 +33,15 @@ import { supabaseRPC } from './_supabase.js';
 /// which food ITS number describes, and the client refuses the ones that do
 /// not match. Validating the page title would have accepted all three.
 ///
-/// Metered as research, on the existing budget and the existing kill switch.
-/// POST { query, form }.
+/// POST { query, form, installId, actionId, requestId }.
+///
+/// METERED ON ITS OWN ALLOWANCE. Every UNCACHED lookup reserves against the
+/// caller's web-lookup credits and the day's ceiling before the search runs,
+/// and settles to the real usage, web searches included. A shared-cache hit
+/// is answered before any of that and costs nothing. Before this it was
+/// called with the shared token and charged to nothing at all.
 const MODEL = process.env.RESEARCH_MODEL || 'claude-haiku-4-5';
 const TIMEOUT_MS = 45000;
-/// $10 per 1,000 searches, published. Same figure research.js records.
-const SEARCH_COST_USD = 0.01;
 
 const SYSTEM = `You research the nutrition of ONE ingredient using web search.
 
@@ -266,10 +274,24 @@ async function rememberEvidence(key, payload, seconds) {
   }
 }
 
+/// A parsed body cannot be hashed for the assertion.
+export const config = { api: { bodyParser: false } };
+
+/// The most a web lookup can cost, for the reservation: three searches at a
+/// cent each, search results counted at a generous 15k tokens a search, and
+/// the full output limit.
+const MAX_SEARCHES = 3;
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'POST only.' });
 
-  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '');
+  let rawBody, body;
+  try {
+    ({ raw: rawBody, body } = await readJSONBody(req));
+  } catch {
+    return json(res, 400, { error: 'unreadable body' });
+  }
+
   const auth = await authenticate(req, {
     meterClass: MeterClass.research,
     path: '/api/ingredient',
@@ -292,7 +314,6 @@ export default async function handler(req, res) {
     return json(res, 503, { error: 'unavailable', reason: 'not_configured' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const query = String(body.query || '').trim().slice(0, 120);
   if (query.length < 2) return json(res, 400, { error: 'query too short' });
   const wantedForm = FORMS.has(body.form) ? body.form : null;
@@ -301,7 +322,8 @@ export default async function handler(req, res) {
 
   // ALREADY ANSWERED, BY SOMEBODY, FOR EVERYBODY. The rows come back exactly as
   // they were stored -- not a figure, the evidence -- and the app judges them
-  // with the same gate it applies to a live answer.
+  // with the same gate it applies to a live answer. Answered before any
+  // allowance is touched: a hit is free for everyone, Free included.
   const key = cacheKey(query, wantedForm);
   const cached = await cachedEvidence(key);
   if (cached) {
@@ -319,53 +341,95 @@ export default async function handler(req, res) {
     });
   }
 
+  let caller;
+  try {
+    caller = await resolveCaller(auth, { installId: body.installId });
+  } catch (error) {
+    report('ingredient caller', error);
+    return json(res, 503, { error: 'unavailable', reason: 'upstream' });
+  }
+  const entitlement = entitlementRefusal(caller, 'ingredient');
+  if (entitlement) return sendRefusal(res, entitlement);
+
   const asked = wantedForm
     ? `${query} (${wantedForm}) -- nutrition per 100 g, with sources`
     : `${query} -- nutrition per 100 g, with sources`;
 
-  let upstream;
+  const requestId = cleanId(body.requestId) || randomUUID();
+  const actionId = cleanId(body.actionId) || requestId;
+  const reserveUSD = reservationForServerCall({
+    model: MODEL, system: SYSTEM, user: asked, maxTokens: 2500, maxSearches: MAX_SEARCHES
+  });
+
+  let run;
   try {
-    upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2500,
-        temperature: 0,
-        system: SYSTEM,
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
-        messages: [{ role: 'user', content: asked }]
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS)
+    run = await metered({
+      subject: caller.subject, subjectKind: caller.subjectKind, tier: caller.tier,
+      budgetTier: caller.budgetTier,
+      authPath: auth.path, feature: 'ingredient', bucket: 'web', counts: true,
+      actionId, requestId, model: MODEL, period: caller.period, reserveUSD,
+      limits: limitsFor(caller)
+    }, async () => {
+      let upstream;
+      try {
+        upstream = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: 2500,
+            temperature: 0,
+            system: SYSTEM,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES }],
+            messages: [{ role: 'user', content: asked }]
+          }),
+          signal: AbortSignal.timeout(TIMEOUT_MS)
+        });
+      } catch (error) {
+        const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+        return { ok: false, ambiguous: true, reason: timedOut ? 'timeout' : 'upstream' };
+      }
+      if (!upstream.ok) {
+        return { ok: false, httpStatus: upstream.status, providerRequestId: upstream.headers.get('request-id') };
+      }
+      let payload;
+      try { payload = await upstream.json(); }
+      catch { return { ok: false, ambiguous: true, httpStatus: 200, reason: 'malformed' }; }
+      const text = (payload?.content || []).filter(part => part.type === 'text')
+        .map(part => part.text).join('').trim();
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      let parsed = null;
+      if (start >= 0 && end > start) {
+        try { parsed = JSON.parse(text.slice(start, end + 1)); } catch { parsed = null; }
+      }
+      return { ok: !!parsed, httpStatus: 200, usage: payload?.usage || null, payload, parsed,
+               label: parsed ? 'ok' : 'malformed',
+               providerRequestId: upstream.headers.get('request-id') };
     });
   } catch (error) {
-    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
-    report('ingredient', error);
-    return json(res, 503, { error: 'unavailable', reason: timedOut ? 'timeout' : 'upstream' });
-  }
-
-  if (upstream.status === 429) return json(res, 429, { error: 'unavailable', reason: 'rate_limited' });
-  if (!upstream.ok) {
-    report('ingredient', new Error(`anthropic returned ${upstream.status}`));
+    report('ingredient metering', error);
     return json(res, 503, { error: 'unavailable', reason: 'upstream' });
   }
 
-  let payload;
-  try { payload = await upstream.json(); }
-  catch { return json(res, 503, { error: 'unavailable', reason: 'malformed' }); }
-
-  const text = (payload?.content || []).filter(part => part.type === 'text')
-    .map(part => part.text).join('').trim();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return json(res, 503, { error: 'unavailable', reason: 'malformed' });
-  let parsed;
-  try { parsed = JSON.parse(text.slice(start, end + 1)); }
-  catch { return json(res, 503, { error: 'unavailable', reason: 'malformed' }); }
+  if (run.refused) {
+    return sendRefusal(res, allowanceRefusal(run.refused,
+      { tier: caller.tier, bucket: 'web', limit: run.limit }));
+  }
+  const { outcome } = run;
+  if (outcome.httpStatus === 429) return json(res, 429, { error: 'unavailable', reason: 'rate_limited' });
+  if (!outcome.httpStatus) return json(res, 503, { error: 'unavailable', reason: outcome.reason || 'upstream' });
+  if (outcome.httpStatus !== 200) {
+    report('ingredient', new Error(`anthropic returned ${outcome.httpStatus}`));
+    return json(res, 503, { error: 'unavailable', reason: 'upstream' });
+  }
+  if (!outcome.parsed) return json(res, 503, { error: 'unavailable', reason: 'malformed' });
+  const payload = outcome.payload;
+  const parsed = outcome.parsed;
 
   const cited = citedURLs(payload);
   const result = shape(parsed, cited);
@@ -375,7 +439,9 @@ export default async function handler(req, res) {
   // EVIDENCE IS WHAT WAS RETRIEVED. A run that searched and kept nothing
   // citable is model knowledge with a bigger bill, and says so.
   result.evidence = result.results.length > 0 ? 'retrieval_backed' : 'model_knowledge';
-  result.cost_usd = costOfUsage(MODEL, payload?.usage) + searches * SEARCH_COST_USD;
+  // Computed from usage, web searches included, and the same figure the
+  // ledger recorded.
+  result.cost_usd = run.actualUSD;
   result.search_operations = searches;
   result.retrieved_at = new Date().toISOString();
   result.cached = false;

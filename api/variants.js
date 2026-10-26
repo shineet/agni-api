@@ -1,4 +1,4 @@
-import { cachedVariants, cacheVariants, json, report } from './_lib.js';
+import { readJSONBody, cachedVariants, cacheVariants, json, report } from './_lib.js';
 import { authenticate, recordAuth, MeterClass } from './_auth.js';
 
 /// The cache in front of the variant search.
@@ -10,7 +10,19 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 /// but the time it took to ask: the app falls through to the model on a miss
 /// and carries on without the store on a failed write, and neither is worth a
 /// banner over somebody's dinner.
+/// Read raw: an assertion is bound to the bytes that arrived, and a parsed
+/// body re-serialises to different ones.
+export const config = { api: { bodyParser: false } };
+
 export default async function handler(req, res) {
+  let rawBody, body;
+  try {
+    ({ raw: rawBody, body } = await readJSONBody(req));
+  } catch {
+    json(res, 400, { error: 'Unreadable body.' });
+    return;
+  }
+
   // ATTESTATION FIRST, LEGACY STILL ACCEPTED. Backwards compatible by
   // construction: the only change here is additional acceptance, so every
   // client already in the field keeps working unchanged. Metered on the READ
@@ -20,7 +32,7 @@ export default async function handler(req, res) {
     meterClass: MeterClass.read,
     path: '/api/variants',
     query: req.query || {},
-    rawBody: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? '')
+    rawBody
   });
   recordAuth('variants', auth, req);
   if (!auth.ok) {
@@ -45,8 +57,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const key = String(req.body?.query || '').trim().toLowerCase();
-    const variants = Array.isArray(req.body?.variants) ? req.body.variants : [];
+    const key = String(body?.query || '').trim().toLowerCase();
+    const variants = Array.isArray(body?.variants) ? body.variants : [];
     if (key.length < 4 || key.length > 60 || !variants.length) {
       json(res, 200, { stored: false });
       return;
