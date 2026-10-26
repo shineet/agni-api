@@ -15,7 +15,7 @@ import { validateModelRequest, reservationFor, imageDimensions, inferFeature } f
 
 const file = process.env.AGNI_APP_BODIES;
 const skip = !file && 'AGNI_APP_BODIES not set';
-const FEATURE = { photo: 'photo', label: 'label', breakdown: 'breakdown', drink: 'drink_id',
+const FEATURE = { photo: 'photo', photo_streamed: 'photo', photo_part: 'photo', label: 'label', breakdown: 'breakdown', drink: 'drink_id',
                   drink_check: 'drink_check', variant: 'variant_search' };
 
 test('every real app request passes the server allowlist, with its real JPEG', { skip }, () => {
