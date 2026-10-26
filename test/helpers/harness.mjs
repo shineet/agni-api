@@ -156,6 +156,7 @@ export function installFetch() {
         error.name = response.throw;
         throw error;
       }
+      if (response.events) return streamedResponse(response, options.signal);
       const payload = response.body ?? {
         content: [{ type: 'text', text: '{"ok":true}' }],
         usage: response.usage
@@ -169,6 +170,44 @@ export function installFetch() {
   };
 }
 export function restoreFetch() { globalThis.fetch = realFetch; }
+
+/// A provider stream: each event split in two, as a network does, so nothing
+/// may rely on an event arriving whole. `cutAfter` errors the stream after
+/// that many events; `hang` holds it open until the caller aborts.
+function streamedResponse({ events, cutAfter, hang, status = 200 }, signal) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      const abort = () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        try { controller.error(error); } catch {}
+      };
+      signal?.addEventListener('abort', abort);
+      events.forEach((e, i) => {
+        if (cutAfter !== undefined && i >= cutAfter) return;
+        const half = Math.floor(e.length / 2);
+        controller.enqueue(encoder.encode(e.slice(0, half)));
+        controller.enqueue(encoder.encode(e.slice(half)));
+      });
+      // Later, so the events already sent are read first: error() discards
+      // whatever is still queued, which is not what a dropped socket does.
+      if (cutAfter !== undefined) setTimeout(() => controller.error(new Error('socket hang up')), 20);
+      else if (!hang) controller.close();
+    }
+  });
+  return new Response(body, { status, headers: { 'content-type': 'text/event-stream', 'request-id': 'req_stream' } });
+}
+
+/// Anthropic's events for one finished answer.
+export function sseEvents({ input = 10, output = 5, text = '{"dishes":[]}' } = {}) {
+  return [
+    `event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":${input},"output_tokens":1}}}\n\n`,
+    `event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } })}\n\n`,
+    `event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":${output}}}\n\n`,
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+  ];
+}
 
 // MARK: - Requests
 

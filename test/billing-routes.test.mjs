@@ -134,12 +134,13 @@ test('a photo is one credit: drink check plus estimate share the action', { skip
 test('an automatic retry of the same action costs no second credit; the call cap bounds it', { skip }, async () => {
   const dev = await h.device();
   const action = id('retry');
-  for (let i = 0; i < 4; i += 1) {
+  const { MAX_CALLS_PER_ACTION } = await import('../api/_billing.js');
+  for (let i = 0; i < MAX_CALLS_PER_ACTION; i += 1) {
     const res = await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: action, requestId: id('r'), request: photo() });
     assert.equal(res.statusCode, 200);
   }
-  const fifth = await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: action, requestId: id('r'), request: photo() });
-  assert.equal(fifth.statusCode, 429, 'MAX_CALLS_PER_ACTION stops an unbounded stream on one credit');
+  const over = await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: action, requestId: id('r'), request: photo() });
+  assert.equal(over.statusCode, 429, 'MAX_CALLS_PER_ACTION stops an unbounded stream on one credit');
   assert.equal((await period('dev:' + dev.installId)).photo_used, 1);
 });
 

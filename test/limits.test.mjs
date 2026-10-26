@@ -105,13 +105,23 @@ test('the body cap is several times a real food payload, and bounded', () => {
             'must reject a full-resolution photograph');
 });
 
-test('timeouts are ordered so each layer outlives the one below it', () => {
-  const functionMax = 55_000;
+test('timeouts are ordered so each layer outlives the one below it', async () => {
+  // Read from vercel.json rather than restated here: the estimate ceiling
+  // moved from 55s to 120s for streaming, and a copy of the old number would
+  // have kept passing while proving nothing.
+  const fs = await import('node:fs');
+  const vercel = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const functionMax = vercel.functions['api/estimate.js'].maxDuration * 1000;
   const clientTimeout = 65_000;
+  const { STREAM_TIMEOUT_MS } = await import('../api/estimate.js');
   assert.ok(UPSTREAM_TIMEOUT_MS < functionMax,
             'the upstream must abort before the function is cut off');
-  assert.ok(functionMax < clientTimeout,
-            'the function must answer before the client gives up');
+  assert.ok(UPSTREAM_TIMEOUT_MS + 10_000 < clientTimeout,
+            'a buffered answer must arrive before the client gives up');
+  // The client's 65s is URLSession's IDLE timeout, reset by every event, so
+  // a stream may run longer than it; only the function ceiling bounds it.
+  assert.ok(STREAM_TIMEOUT_MS < functionMax,
+            'a stream must end itself before the function is cut off');
 });
 
 test('the kill switch and the limits are all remotely configurable', async () => {

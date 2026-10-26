@@ -92,16 +92,19 @@ export function allowances() {
 /// Calls that consume no credit (the drink check in front of every photo)
 /// still cost money, so they get a daily count of their own.
 export const UNCREDITED_DAY_CAP = Number(process.env.UNCREDITED_DAY_CAP || 60);
-/// One tap: a drink check, the estimate, and a couple of retries.
-export const MAX_CALLS_PER_ACTION = Number(process.env.MAX_CALLS_PER_ACTION || 4);
-/// Longer than any function may run (estimate is 55s), so a reservation is
-/// only ever treated as abandoned when nothing can still be settling it.
-export const STALE_RESERVATION_SECONDS = 120;
+/// One tap: a drink check, the estimate, the parallel parts a big plate is
+/// split into (up to three beside the main call), and a couple of retries.
+export const MAX_CALLS_PER_ACTION = Number(process.env.MAX_CALLS_PER_ACTION || 8);
+/// Longer than any function may run (estimate is 120s, for streams), so a
+/// reservation is only ever treated as abandoned when nothing can still be
+/// settling it.
+export const STALE_RESERVATION_SECONDS = 180;
 /// Calls one subject may have in flight at once. Every reservation is a bound
 /// the real cost should never beat, but a web search's result size is an
 /// estimate, not a bound: capping concurrency caps how far a period can ever
 /// overshoot its ceiling to this many calls' worth of misestimate.
-export const MAX_OPEN_RESERVATIONS = Number(process.env.MAX_OPEN_RESERVATIONS || 4);
+/// A split plate has four calls in flight at once (main + three parts).
+export const MAX_OPEN_RESERVATIONS = Number(process.env.MAX_OPEN_RESERVATIONS || 6);
 
 // MARK: - Features
 
@@ -171,12 +174,17 @@ export const ALLOWED_MODELS = new Set([
 /// about 17k characters of source, the largest schema well under 10k.
 export const REQUEST_CAPS = {
   maxTokens: 4096,
+  /// A streamed answer may be longer, and only a streamed one: a 13-dish plate
+  /// ran out at 4096 because thinking counts against max_tokens. A buffered
+  /// answer that long would outrun UPSTREAM_TIMEOUT_MS and fail anyway.
+  streamMaxTokens: 8192,
   systemChars: 32_000,
   textChars: 12_000,
   schemaChars: 32_000
 };
 
-const TOP_LEVEL_KEYS = new Set(['model', 'max_tokens', 'system', 'output_config', 'messages', 'temperature']);
+const TOP_LEVEL_KEYS = new Set(['model', 'max_tokens', 'system', 'output_config', 'messages', 'temperature', 'stream']);
+const EFFORTS = new Set(['low', 'medium', 'high']);
 const MEDIA_TYPES = new Set(['image/jpeg', 'image/png']);
 
 /// Refuses anything the app does not send.
@@ -193,9 +201,14 @@ export function validateModelRequest(feature, request) {
     if (!TOP_LEVEL_KEYS.has(key)) return `Field ${key} is not allowed.`;
   }
   if (!ALLOWED_MODELS.has(request.model)) return `Model ${request.model} is not allowed.`;
-  if (!Number.isInteger(request.max_tokens) || request.max_tokens < 1
-      || request.max_tokens > REQUEST_CAPS.maxTokens) {
-    return `max_tokens must be a whole number from 1 to ${REQUEST_CAPS.maxTokens}.`;
+  // Only the meal photo streams and thinks at a set effort; nothing else the
+  // app sends does, so nothing else may.
+  const streams = feature === 'photo';
+  if (request.stream !== undefined && !streams) return 'stream is not allowed here.';
+  if (request.stream !== undefined && typeof request.stream !== 'boolean') return 'stream must be true or false.';
+  const tokenCap = request.stream === true ? REQUEST_CAPS.streamMaxTokens : REQUEST_CAPS.maxTokens;
+  if (!Number.isInteger(request.max_tokens) || request.max_tokens < 1 || request.max_tokens > tokenCap) {
+    return `max_tokens must be a whole number from 1 to ${tokenCap}.`;
   }
   if (request.temperature !== undefined
       && !(typeof request.temperature === 'number' && request.temperature >= 0 && request.temperature <= 1)) {
@@ -206,9 +219,11 @@ export function validateModelRequest(feature, request) {
   }
   if (request.output_config !== undefined) {
     const config = request.output_config;
-    if (!config || typeof config !== 'object' || Object.keys(config).some(k => k !== 'format')) {
-      return 'output_config may only carry a format.';
+    const keys = streams ? ['format', 'effort'] : ['format'];
+    if (!config || typeof config !== 'object' || Object.keys(config).some(k => !keys.includes(k))) {
+      return streams ? 'output_config may only carry a format and an effort.' : 'output_config may only carry a format.';
     }
+    if (config.effort !== undefined && !EFFORTS.has(config.effort)) return 'output_config.effort is not allowed.';
     const format = config.format;
     if (!format || format.type !== 'json_schema' || typeof format.schema !== 'object'
         || Object.keys(format).some(k => k !== 'type' && k !== 'schema')) {
@@ -622,7 +637,9 @@ export async function metered({ subject, subjectKind, tier, budgetTier, authPath
 
   let outcome;
   try {
-    outcome = await call();
+    // The reservation is handed over so a streamed call can report what is
+    // left in its headers, which go out before the call finishes.
+    outcome = await call(reservation);
   } catch (error) {
     report(`provider ${feature}`, error);
     outcome = { ok: false, ambiguous: true, error };

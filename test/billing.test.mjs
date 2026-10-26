@@ -339,6 +339,17 @@ test('the allowlist accepts the app shape and rejects a server-built feature thr
   assert.match(validateModelRequest('variant_search', { ...ok, stream: true }), /stream is not allowed/);
   assert.match(validateModelRequest('variant_search', { ...ok, output_config: { format: { type: 'json_schema', schema: {} }, effort: 'max' } }), /only carry a format/);
   assert.match(validateModelRequest('variant_search', { ...ok, system: [{ type: 'text', text: 'x', cache_control: {} }] }), /system must be a string/);
+  // The meal photo alone streams, at low effort, and may run to 8192 tokens.
+  const photo = { model: 'claude-sonnet-5', max_tokens: 8000, system: 'x', stream: true,
+                  output_config: { effort: 'low', format: { type: 'json_schema', schema: {} } },
+                  messages: [{ role: 'user', content: [{ type: 'text', text: 'plate' }] }] };
+  const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpegHeader(1568, 1176) } };
+  const withImage = (r) => ({ ...r, messages: [{ role: 'user', content: [r.messages[0].content[0], image] }] });
+  assert.equal(validateModelRequest('photo', withImage(photo)), null);
+  assert.match(validateModelRequest('photo', withImage({ ...photo, stream: false })), /1 to 4096/);
+  assert.match(validateModelRequest('photo', withImage({ ...photo, max_tokens: 8193 })), /1 to 8192/);
+  assert.match(validateModelRequest('photo', withImage({ ...photo, stream: 'yes' })), /true or false/);
+  assert.match(validateModelRequest('photo', withImage({ ...photo, output_config: { effort: 'max', format: photo.output_config.format } })), /effort is not allowed/);
 });
 
 test('ids from the client are used only when they look like ids', () => {
