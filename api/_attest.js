@@ -92,37 +92,33 @@ const NONCE_OID_DER = encodeOID(NONCE_OID);
 
 // MARK: - Authenticator data
 
-/// The AT flag: attested credential data (aaguid, credential id) follows the
-/// counter. Set on an attestation, absent on an assertion.
-const FLAG_ATTESTED_DATA = 0x40;
-
 /// The fixed layout Apple documents. Read by offset, with every length checked.
 ///
-/// THE FLAG DECIDES, NOT THE LENGTH. This used to read a credential id from
-/// any authenticator data of 55 bytes or more. An assertion has no credential
-/// id, and on 2026-10-28 an iPhone Duo sent a genuine, correctly signed
-/// assertion longer than 37 bytes: whatever followed the counter was read as
-/// a length, came up short, and every photo from that phone was refused as
-/// "truncated credential id". The AT bit is what says the field is there.
-export function parseAuthenticatorData(authData) {
+/// `attested` says which kind this is, and the CALLER decides, never the
+/// bytes. An attestation carries aaguid and credential id after the counter;
+/// an assertion carries no credential at all, and only its header is read.
+///
+/// Found on 2026-10-28, when every photo from an iPhone Duo was refused as
+/// "truncated credential id". Its assertions are 101 bytes with flags 0xC0:
+/// the AT and ED bits are both set, and what follows the counter is an
+/// extensions map (apple_bundle_version_01, apple_validation_category_01),
+/// not attested data. The old reader treated any authData of 55+ bytes as
+/// attested; reading by the AT flag would have been fooled the same way. The
+/// signature covers every byte either way, so ignoring the tail of an
+/// assertion loosens nothing.
+export function parseAuthenticatorData(authData, { attested = true } = {}) {
   if (authData.length < 37) throw new Error('attestation: authenticator data too short');
   const rpIdHash = authData.subarray(0, 32);
   const flags = authData[32];
   const counter = authData.readUInt32BE(33);
-  let aaguid = null;
-  let credentialId = null;
-  if (flags & FLAG_ATTESTED_DATA) {
-    if (authData.length < 55) throw new Error('attestation: attested data too short');
-    aaguid = authData.subarray(37, 53);
-    const credentialIdLength = authData.readUInt16BE(53);
-    credentialId = authData.subarray(55, 55 + credentialIdLength);
-    if (credentialId.length !== credentialIdLength) {
-      // TEMP DIAGNOSTIC (2026-10-28): a genuine attestation from the iPhone
-      // Duo fails here. authData is public (app id hash, flags, counter,
-      // aaguid, key id), so the whole of it is safe to log. Remove once fixed.
-      console.error('[agni-api] attest-diag authData', authData.length, authData.toString('hex'));
-      throw new Error('attestation: truncated credential id');
-    }
+  if (!attested) return { rpIdHash, flags, counter, aaguid: null, credentialId: null };
+
+  if (authData.length < 55) throw new Error('attestation: attested data too short');
+  const aaguid = authData.subarray(37, 53);
+  const credentialIdLength = authData.readUInt16BE(53);
+  const credentialId = authData.subarray(55, 55 + credentialIdLength);
+  if (credentialId.length !== credentialIdLength) {
+    throw new Error('attestation: truncated credential id');
   }
   return { rpIdHash, flags, counter, aaguid, credentialId };
 }
@@ -201,7 +197,6 @@ export function verifyAttestation({ attestationBase64, keyIdBase64, challenge })
   }
 
   const parsed = parseAuthenticatorData(authData);
-  if (!parsed.credentialId) throw new Error('attestation: no attested credential data');
 
   // STEP 5. This has to be OUR app, not merely some app.
   if (!parsed.rpIdHash.equals(appIdHash())) {
@@ -259,7 +254,7 @@ export function verifyAssertion({ assertionBase64, clientData, publicKeyPem, sto
     throw new Error('assertion: signature does not verify');
   }
 
-  const parsed = parseAuthenticatorData(authData);
+  const parsed = parseAuthenticatorData(authData, { attested: false });
   if (!parsed.rpIdHash.equals(appIdHash())) {
     throw new Error('assertion: this assertion is for a different app');
   }

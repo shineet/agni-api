@@ -100,19 +100,22 @@ test('the CBOR decoder stays strict', () => {
   assert.throws(() => decodeCBOR(Buffer.from('c0', 'hex')), /unsupported major type/);
 });
 
-test('an assertion longer than 37 bytes is read by its flags, not its length', () => {
-  // No AT flag: whatever follows the counter is not a credential id. This is
-  // the shape that locked the iPhone Duo out on 2026-10-28.
-  const assertion = Buffer.concat([
-    Buffer.alloc(32, 7), Buffer.from([0x80]), Buffer.from([0, 0, 0, 9]), Buffer.alloc(40, 0xff)
-  ]);
-  const parsed = parseAuthenticatorData(assertion);
-  assert.equal(parsed.counter, 9);
+test('an assertion is read for its header only, whatever follows the counter', () => {
+  // The real authenticator data from the iPhone Duo on 2026-10-28: flags
+  // 0xC0 (AT and ED both set) and an extensions map after the counter, no
+  // credential. Reading it as attested data refused every photo.
+  const duo = Buffer.from('1427143235451e419d4193fc30376b77713068c84095adfb29bfbe64eaf13d70c000000007a2776170706c655f62756e646c655f76657273696f6e5f303163313736781c6170706c655f76616c69646174696f6e5f63617465676f72795f30314403000000', 'hex');
+  assert.equal(duo.length, 101);
+  const parsed = parseAuthenticatorData(duo, { attested: false });
+  assert.equal(parsed.counter, 7);
+  assert.equal(parsed.flags, 0xc0);
   assert.equal(parsed.credentialId, null);
-  assert.equal(parsed.aaguid, null);
+  // The same bytes read as an attestation still fail, as they should.
+  assert.throws(() => parseAuthenticatorData(duo), /truncated credential id/);
+  assert.throws(() => parseAuthenticatorData(Buffer.alloc(36), { attested: false }), /too short/);
 });
 
-test('attested data is still required in full when the AT flag says it is there', () => {
+test('an attestation must carry its attested data in full', () => {
   const short = Buffer.concat([Buffer.alloc(32, 7), Buffer.from([0x40]), Buffer.from([0, 0, 0, 0]), Buffer.alloc(10)]);
   assert.throws(() => parseAuthenticatorData(short), /attested data too short/);
   const truncated = Buffer.concat([
