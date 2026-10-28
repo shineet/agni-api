@@ -99,3 +99,25 @@ test('the CBOR decoder stays strict', () => {
   assert.throws(() => decodeCBOR(Buffer.from('a26161016162420102ff', 'hex')), /trailing/);
   assert.throws(() => decodeCBOR(Buffer.from('c0', 'hex')), /unsupported major type/);
 });
+
+test('an assertion longer than 37 bytes is read by its flags, not its length', () => {
+  // No AT flag: whatever follows the counter is not a credential id. This is
+  // the shape that locked the iPhone Duo out on 2026-10-28.
+  const assertion = Buffer.concat([
+    Buffer.alloc(32, 7), Buffer.from([0x80]), Buffer.from([0, 0, 0, 9]), Buffer.alloc(40, 0xff)
+  ]);
+  const parsed = parseAuthenticatorData(assertion);
+  assert.equal(parsed.counter, 9);
+  assert.equal(parsed.credentialId, null);
+  assert.equal(parsed.aaguid, null);
+});
+
+test('attested data is still required in full when the AT flag says it is there', () => {
+  const short = Buffer.concat([Buffer.alloc(32, 7), Buffer.from([0x40]), Buffer.from([0, 0, 0, 0]), Buffer.alloc(10)]);
+  assert.throws(() => parseAuthenticatorData(short), /attested data too short/);
+  const truncated = Buffer.concat([
+    Buffer.alloc(32, 7), Buffer.from([0x40]), Buffer.from([0, 0, 0, 0]),
+    Buffer.from('appattestdevelop'), Buffer.from([0, 32]), Buffer.alloc(8)
+  ]);
+  assert.throws(() => parseAuthenticatorData(truncated), /truncated credential id/);
+});

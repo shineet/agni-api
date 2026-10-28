@@ -92,7 +92,18 @@ const NONCE_OID_DER = encodeOID(NONCE_OID);
 
 // MARK: - Authenticator data
 
+/// The AT flag: attested credential data (aaguid, credential id) follows the
+/// counter. Set on an attestation, absent on an assertion.
+const FLAG_ATTESTED_DATA = 0x40;
+
 /// The fixed layout Apple documents. Read by offset, with every length checked.
+///
+/// THE FLAG DECIDES, NOT THE LENGTH. This used to read a credential id from
+/// any authenticator data of 55 bytes or more. An assertion has no credential
+/// id, and on 2026-10-28 an iPhone Duo sent a genuine, correctly signed
+/// assertion longer than 37 bytes: whatever followed the counter was read as
+/// a length, came up short, and every photo from that phone was refused as
+/// "truncated credential id". The AT bit is what says the field is there.
 export function parseAuthenticatorData(authData) {
   if (authData.length < 37) throw new Error('attestation: authenticator data too short');
   const rpIdHash = authData.subarray(0, 32);
@@ -100,7 +111,8 @@ export function parseAuthenticatorData(authData) {
   const counter = authData.readUInt32BE(33);
   let aaguid = null;
   let credentialId = null;
-  if (authData.length >= 55) {
+  if (flags & FLAG_ATTESTED_DATA) {
+    if (authData.length < 55) throw new Error('attestation: attested data too short');
     aaguid = authData.subarray(37, 53);
     const credentialIdLength = authData.readUInt16BE(53);
     credentialId = authData.subarray(55, 55 + credentialIdLength);
@@ -189,6 +201,7 @@ export function verifyAttestation({ attestationBase64, keyIdBase64, challenge })
   }
 
   const parsed = parseAuthenticatorData(authData);
+  if (!parsed.credentialId) throw new Error('attestation: no attested credential data');
 
   // STEP 5. This has to be OUR app, not merely some app.
   if (!parsed.rpIdHash.equals(appIdHash())) {
