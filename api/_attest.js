@@ -105,6 +105,10 @@ export function parseAuthenticatorData(authData) {
     const credentialIdLength = authData.readUInt16BE(53);
     credentialId = authData.subarray(55, 55 + credentialIdLength);
     if (credentialId.length !== credentialIdLength) {
+      // TEMP DIAGNOSTIC (2026-10-28): a genuine attestation from the iPhone
+      // Duo fails here. authData is public (app id hash, flags, counter,
+      // aaguid, key id), so the whole of it is safe to log. Remove once fixed.
+      console.error('[agni-api] attest-diag authData', authData.length, authData.toString('hex'));
       throw new Error('attestation: truncated credential id');
     }
   }
