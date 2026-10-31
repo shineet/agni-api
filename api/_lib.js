@@ -199,9 +199,13 @@ export async function consume(installId) {
 /// before anything is published, how many people wanted a dish) but never
 /// need to know WHICH phone. They used to store the raw install id, which is
 /// also the key of that phone's usage records (`dev:<install id>`), so the two
-/// could be joined. This is a keyed one-way hash of it instead: the same phone
-/// always gets the same value, so every rule above still works, but without
-/// the key it cannot be matched to usage records or back to the install.
+/// could be joined with a plain equality. This is a keyed hash of it instead:
+/// the same phone always gets the same value, so every rule above still works.
+///
+/// PSEUDONYMOUS, NOT ANONYMOUS. The server holds the key and can recompute any
+/// phone's value from its install id, so a row stays linkable to that phone by
+/// anyone with the key and the id. What it removes is the raw id stored beside
+/// dish data. Describe it that way anywhere it is described.
 ///
 /// Deletion still works: a request carrying a verified install id hashes it
 /// the same way and finds that phone's rows.

@@ -16,9 +16,9 @@
 -- people wanted a thing rather than how loudly one person did.
 --
 -- It holds dish names and a keyed hash of the install id (`c1:...`, see
--- contributorId in api/_lib.js), never the raw id since 2026-10-31. No account,
--- no email, nothing that says who anybody is, and nothing that joins to a
--- phone's usage records.
+-- contributorId in api/_lib.js), never the raw id since 2026-10-31. No account
+-- and no email. The hash is pseudonymous: the server can recompute it from an
+-- install id, so a row is linkable to a phone by whoever holds the key.
 
 create table if not exists agni_dish_misses (
   key         text        not null,   -- normalised, matching DishDatabase.normalise

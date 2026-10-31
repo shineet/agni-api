@@ -21,7 +21,7 @@ it is not applied to production and not scheduled. The privacy policy must not q
 | agni_subjects (devices), agni_key_links, agni_attest_keys | fraud / Free-sample abuse | NOT deleted yet | Deleting an attest key makes that phone's next request fail with "key is not registered"; the app's recovery has not been verified on a device. Proposed once verified: 400 days after the key was last seen. |
 | agni_installs (legacy token path) | legacy | delete 90 days after LEGACY_TOKEN_ENABLED=false | Only builds before App Attest use it. Not in the function (needs the env state). |
 | agni_beta_signups | legacy, has email | Shine's decision | Suggest deleting 90 days after launch, or on request. Not in the function. |
-| agni_dish_submissions, agni_dish_misses | product data | kept while the table is used | Contributor hash since 91bc943, not linked to usage records. |
+| agni_dish_submissions, agni_dish_misses | product data | kept while the table is used | Contributor hash since 91bc943: pseudonymous, not anonymous. The server can recompute it from an install id, so it stays linkable by whoever holds the secret; it only removes the raw id from beside dish data. |
 
 ## Scheduling (not wired)
 

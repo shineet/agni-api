@@ -29,7 +29,8 @@ create table if not exists agni_dish_submissions (
   name            text        not null,
   -- NOT the raw install id since 2026-10-31: a keyed hash of it (`c1:...`,
   -- contributorId in api/_lib.js). Tells one phone from another for the rules
-  -- below without being joinable to that phone's usage records.
+  -- below. Pseudonymous: the server can recompute it from an install id, so it
+  -- is not a plain-equality join to usage records, but it is not anonymous.
   install_id      text        not null,
 
   unit            text        not null default 'serving',

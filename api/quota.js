@@ -5,6 +5,7 @@ import { resolveCaller, allowanceStatus, MAX_KEYS_PER_SUBSCRIPTION } from './_ca
 import { cleanId, raiseAlert } from './_billing.js';
 import { verifyAppStoreJWS, transactionState, upsertSubscription, handleNotification } from './_storekit.js';
 import { deviceCheckConfigured, queryBits, setBits } from './_devicecheck.js';
+import { contribMigration } from './_contrib-migration.js';
 
 /// The account endpoint: allowance, subscription sync and App Store
 /// notifications. One function, because Vercel's Hobby plan counts them and
@@ -18,6 +19,9 @@ import { deviceCheckConfigured, queryBits, setBits } from './_devicecheck.js';
 ///                                         root, linked to this install
 ///   POST /api/app-store-notifications     App Store Server Notifications V2
 ///                                         (rewritten here as ?op=notify)
+///   POST /api/quota?op=contrib-migrate    one-off admin conversion of stored
+///                                         install ids to contributor hashes
+///                                         (BETA_ADMIN_TOKEN; migrations/README.md)
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
@@ -34,6 +38,8 @@ export default async function handler(req, res) {
   // Apple calls this one, not the app: its authority is Apple's signature on
   // the payload, checked before anything is written.
   if (req.method === 'POST' && op === 'notify') return notify(res, body);
+  // The operator, not the app: authority is BETA_ADMIN_TOKEN, checked inside.
+  if (req.method === 'POST' && op === 'contrib-migrate') return contribMigration(req, res, body);
 
   const auth = await authenticate(req, {
     meterClass: MeterClass.read,

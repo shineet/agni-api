@@ -1,17 +1,15 @@
 // The shared dish table and the missed-dish list store a keyed hash of the
-// install id, not the id itself, so neither can be joined to a phone's usage
-// records (`dev:<install id>`). Every rule that needed to tell phones apart
-// must still hold, and the prepared cleanup of older rows must produce the
-// same value the server now writes.
+// install id, not the id itself, so the raw id no longer sits beside dish data
+// (where a plain equality reached `dev:<install id>` usage records). The hash
+// is pseudonymous: the server can recompute it. Every rule that needed to tell
+// phones apart must still hold. The conversion of older rows is tested in
+// contrib-migration.test.mjs.
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import * as h from './helpers/harness.mjs';
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
-const ROOT = path.join(import.meta.dirname, '..');
 const SALT = 'test-salt-for-contributors';
 let dishes, misses, contributorId;
 
@@ -44,7 +42,7 @@ test('contributorId: stable per install, different between installs, never the r
   assert.equal(contributorId('short'), '', 'an id the SQL would refuse stays refused');
 });
 
-test('contributorId depends on the secret, so it cannot be recomputed from the install id alone', () => {
+test('contributorId depends on the server key: the install id alone does not give it, the key and the id do', () => {
   const withSalt = contributorId('INSTALL-aaaaaaaa');
   process.env.IP_HASH_SALT = 'a-different-secret';
   assert.notEqual(contributorId('INSTALL-aaaaaaaa'), withSalt);
@@ -86,38 +84,4 @@ test('misses count people by contributor, and a re-sent running total does not d
   const ids = await h.sqlJSON(`select install_id from agni_dish_misses where key = 'test kozhukatta' order by install_id`);
   assert.deepEqual(ids.map(r => r.install_id).sort(),
                    [contributorId(one.installId), contributorId(two.installId)].sort());
-});
-
-test('the prepared cleanup converts old raw rows to exactly what the server now writes', { skip }, async () => {
-  await h.sql(`create schema if not exists extensions; create extension if not exists pgcrypto schema extensions;`);
-  const old = 'INSTALL-legacy-raw-1';
-  const both = await h.device();
-  // A raw row from before the change, and the same phone's raw AND hashed rows
-  // for one dish (it submitted again after the deploy, before the cleanup).
-  await h.sql(`insert into agni_dish_submissions (key, name, install_id, kcal) values
-                 ('test idli', 'Test idli', '${old}', 60),
-                 ('test dosa', 'Test dosa', '${both.installId}', 150)`);
-  await h.sql(`insert into agni_dish_misses (key, name, kind, install_id, times) values
-                 ('test appam', 'Test appam', 'searchFoundNothing', '${old}', 5),
-                 ('test puttu', 'Test puttu', 'namedByYou', '${both.installId}', 7)`);
-  await post(dishes, both, '/api/dishes', { dishes: [{ ...chapati, key: 'test dosa', name: 'Test dosa', kcal: 160 }] });
-  await post(misses, both, '/api/misses', { misses: [{ key: 'test puttu', name: 'Test puttu', kind: 'namedByYou', times: 2 }] });
-
-  const migration = readFileSync(path.join(ROOT, 'migrations/2026-10-31-dish-install-id-cleanup.sql'), 'utf8')
-    .replaceAll('PASTE_IP_HASH_SALT_HERE', SALT);
-  const left = await h.sql(migration);
-  assert.match(left, /^submissions\|2\|1\nmisses\|2\|1\n/, 'the preview counts raw rows and raw rows with a hashed twin');
-  assert.match(left, /\n0\nCOMMIT$/, 'the guard query reports no raw rows left');
-
-  assert.equal(await h.sql(`select install_id from agni_dish_submissions where key = 'test idli'`), contributorId(old));
-  assert.equal(await h.sql(`select install_id from agni_dish_misses where key = 'test appam'`), contributorId(old));
-  const dosa = await h.sqlJSON(`select install_id, kcal from agni_dish_submissions where key = 'test dosa'`);
-  assert.deepEqual(dosa, [{ install_id: contributorId(both.installId), kcal: 160 }], 'the newer hashed row wins');
-  const puttu = await h.sqlJSON(`select install_id, times from agni_dish_misses where key = 'test puttu'`);
-  assert.deepEqual(puttu, [{ install_id: contributorId(both.installId), times: 7 }], 'the larger running total is kept');
-  assert.equal(await h.sql(`select count(*) from agni_dish_submissions where install_id not like 'c1:%'`), '0');
-
-  // Running it again changes nothing.
-  await h.sql(migration);
-  assert.equal(await h.sql(`select count(*) from agni_dish_misses where key = 'test puttu'`), '1');
 });
