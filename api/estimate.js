@@ -122,7 +122,7 @@ export default async function handler(req, res) {
       return json(res, 402, {
         error: {
           type: 'quota_exceeded',
-          message: `You have used all ${quota.limit} free estimates. Add your own Anthropic API key in Settings to keep going.`
+          message: `You have used all ${quota.limit} free estimates. You can keep logging by hand, with search, barcode and quick add.`
         },
         quota
       });
