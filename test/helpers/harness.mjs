@@ -73,7 +73,7 @@ export function freshDatabase(label) {
      alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;`]);
   for (const file of ['schema.sql', 'schema-attest.sql', 'schema-limits.sql', 'schema-auth.sql',
                       'schema-variants.sql', 'schema-community.sql', 'schema-misses.sql',
-                      'schema-ingredient-cache.sql', 'schema-beta.sql', 'schema-billing.sql',
+                      'schema-ingredient-cache.sql', 'schema-beta.sql', 'schema-billing.sql', 'schema-retention.sql',
                       'schema-lockdown.sql']) {
     execFileSync(PSQL, [dbURL(database), '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.join(ROOT, file)],
                  { stdio: ['ignore', 'ignore', 'pipe'] });
