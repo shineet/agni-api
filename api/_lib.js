@@ -2,6 +2,8 @@
 // it is two endpoints and a fetch, and a dependency tree would be more code to
 // maintain than the thing it serves.
 
+import { createHmac } from 'node:crypto';
+
 export const FREE_LIMIT = Number(process.env.FREE_ESTIMATE_LIMIT || 50);
 
 /// The model allowlist and the request shape now live in _billing.js
@@ -192,11 +194,34 @@ export async function consume(installId) {
   return typeof used === 'number' ? used : Number(used);
 }
 
+/// THE CONTRIBUTOR, NOT THE INSTALL. The shared dish table and the missed-dish
+/// list need to tell one phone from another (one voice per dish, two voices
+/// before anything is published, how many people wanted a dish) but never
+/// need to know WHICH phone. They used to store the raw install id, which is
+/// also the key of that phone's usage records (`dev:<install id>`), so the two
+/// could be joined. This is a keyed one-way hash of it instead: the same phone
+/// always gets the same value, so every rule above still works, but without
+/// the key it cannot be matched to usage records or back to the install.
+///
+/// Deletion still works: a request carrying a verified install id hashes it
+/// the same way and finds that phone's rows.
+///
+/// `c1:` marks the scheme, so the cleanup of older rows can skip rows already
+/// converted, and a future scheme can be told apart. Keyed on IP_HASH_SALT,
+/// which production already holds as a secret; the domain prefix keeps the two
+/// uses from ever producing the same value.
+export function contributorId(installId) {
+  const id = String(installId || '').trim();
+  if (id.length < 8) return '';
+  const key = process.env.CONTRIBUTOR_SALT || process.env.IP_HASH_SALT || 'agni-contributor';
+  return 'c1:' + createHmac('sha256', key).update('dish-contributor|' + id).digest('hex').slice(0, 32);
+}
+
 /// Records one person's version of a dish. Their own previous answer for the
 /// same dish is replaced, so somebody entering chapati every week is one voice.
 export async function submitDish(installId, dish) {
   await supabaseRPC('agni_submit_dish', {
-    p_install_id: installId,
+    p_install_id: contributorId(installId),
     p_key: dish.key,
     p_name: dish.name,
     p_unit: dish.unit ?? 'serving',
@@ -222,7 +247,7 @@ export async function searchDishes(query, limit) {
 /// its running total, which replaces what is stored rather than adding to it.
 export async function reportMiss(installId, miss) {
   await supabaseRPC('agni_report_miss', {
-    p_install_id: installId,
+    p_install_id: contributorId(installId),
     p_key: miss.key,
     p_name: miss.name,
     p_kind: miss.kind,

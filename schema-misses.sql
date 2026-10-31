@@ -15,8 +15,10 @@
 -- install count is surfaced instead so the list can be ordered by how many
 -- people wanted a thing rather than how loudly one person did.
 --
--- It holds dish names and an anonymous install id. No account, no email,
--- nothing that says who anybody is.
+-- It holds dish names and a keyed hash of the install id (`c1:...`, see
+-- contributorId in api/_lib.js), never the raw id since 2026-10-31. No account,
+-- no email, nothing that says who anybody is, and nothing that joins to a
+-- phone's usage records.
 
 create table if not exists agni_dish_misses (
   key         text        not null,   -- normalised, matching DishDatabase.normalise

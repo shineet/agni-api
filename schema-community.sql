@@ -27,6 +27,9 @@ create table if not exists agni_dish_submissions (
   key             text        not null,
   -- As typed, for display. The most common spelling wins when published.
   name            text        not null,
+  -- NOT the raw install id since 2026-10-31: a keyed hash of it (`c1:...`,
+  -- contributorId in api/_lib.js). Tells one phone from another for the rules
+  -- below without being joinable to that phone's usage records.
   install_id      text        not null,
 
   unit            text        not null default 'serving',
