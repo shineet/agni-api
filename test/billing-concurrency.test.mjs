@@ -3,6 +3,7 @@
 //
 //   AGNI_TEST_PG=postgresql://postgres@127.0.0.1:55432/postgres node --test test/billing-concurrency.test.mjs
 
+import './helpers/no-network.mjs';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';

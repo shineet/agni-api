@@ -6,6 +6,7 @@
 //
 // The pure checks run without AGNI_TEST_PG.
 
+import './helpers/no-network.mjs';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';

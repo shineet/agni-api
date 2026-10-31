@@ -9,6 +9,7 @@
 // Each psql call is its own connection, so calls made with Promise.all really
 // do race inside Postgres: the concurrency tests are not simulated.
 
+import { noNetworkFetch } from './no-network.mjs';
 import { execFile, execFileSync } from 'node:child_process';
 import { createHash, createSign, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -137,7 +138,8 @@ export function okText(text, usage = { input_tokens: 3000, output_tokens: 600 },
   return { status: 200, body: { content: [{ type: 'text', text }], usage, ...extra } };
 }
 
-const realFetch = globalThis.fetch;
+// Restores the fail-closed guard, never the real fetch (see no-network.mjs).
+const realFetch = noNetworkFetch;
 export function installFetch() {
   globalThis.fetch = async (url, options = {}) => {
     const target = String(url);
@@ -167,7 +169,7 @@ export function installFetch() {
         headers: { 'content-type': 'application/json', 'request-id': 'req_test' }
       });
     }
-    throw new Error(`unexpected fetch in test: ${target}`);
+    return realFetch(url, options);   // loopback passes, anything else throws
   };
 }
 export function restoreFetch() { globalThis.fetch = realFetch; }

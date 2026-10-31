@@ -4,6 +4,7 @@
 //
 // Skipped without AGNI_TEST_PG, so `npm test` still runs anywhere.
 
+import './helpers/no-network.mjs';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';

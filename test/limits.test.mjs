@@ -7,6 +7,7 @@
 //
 //   npm test
 
+import './helpers/no-network.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LIMITS, costOfUsage, refusal, AgniError, MAX_BODY_BYTES, UPSTREAM_TIMEOUT_MS }

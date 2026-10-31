@@ -5,6 +5,7 @@
 // phones apart must still hold. The conversion of older rows is tested in
 // contrib-migration.test.mjs.
 
+import './helpers/no-network.mjs';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';

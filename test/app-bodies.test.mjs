@@ -8,6 +8,7 @@
 // Skipped without it. This is the check that a prompt change in the app cannot
 // silently start failing the proxy's validation for every user.
 
+import './helpers/no-network.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

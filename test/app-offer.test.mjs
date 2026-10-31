@@ -6,6 +6,7 @@
 // server does not honour. Point AGNI_APP_SOURCE at the app's source folder;
 // skipped without it (and when the default checkout path is missing).
 
+import './helpers/no-network.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';

@@ -9,6 +9,7 @@
 // it used, and an old build that does not ask for a stream gets the JSON it
 // always had.
 
+import './helpers/no-network.mjs';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';

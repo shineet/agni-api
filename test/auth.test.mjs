@@ -1,3 +1,4 @@
+import './helpers/no-network.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canonicalRequest, MeterClass, AuthPath } from '../api/_auth.js';

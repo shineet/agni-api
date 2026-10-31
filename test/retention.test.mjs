@@ -2,6 +2,7 @@
 // never touches what the code still reads. Prepared, not scheduled: these
 // tests are what has to pass before it is.
 
+import './helpers/no-network.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';

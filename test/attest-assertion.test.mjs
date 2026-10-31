@@ -14,6 +14,7 @@
 //
 //   node --test test/attest-assertion.test.mjs
 
+import './helpers/no-network.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, createSign, generateKeyPairSync } from 'node:crypto';

@@ -7,6 +7,7 @@
 // service-wide day spend with a negative cost; the exploit tests below are
 // those two calls, made as anon.
 
+import './helpers/no-network.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';

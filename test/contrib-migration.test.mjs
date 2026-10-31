@@ -3,6 +3,7 @@
 // Preview writes nothing, apply converts and backs up, verify proves it,
 // rollback restores the exact rows, and only the admin token gets in.
 
+import './helpers/no-network.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as h from './helpers/harness.mjs';
