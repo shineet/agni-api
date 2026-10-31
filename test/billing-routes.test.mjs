@@ -453,6 +453,28 @@ test('build 174/175 binding (body only) still verifies on estimate, and is meter
   assert.deepEqual(event, { tier: 'beta', feature: 'photo' });
 });
 
+test('a device in BILLING_ENFORCED_DEVICES sees launch behaviour while the switch is off; others stay beta', { skip }, async () => {
+  const before = { on: process.env.BILLING_ENFORCED, list: process.env.BILLING_ENFORCED_DEVICES };
+  process.env.BILLING_ENFORCED = 'false';
+  try {
+    const listed = await h.device();
+    const other = await h.device();
+    process.env.BILLING_ENFORCED_DEVICES = ` dev:not-this-one-123 , dev:${listed.installId} `;
+    const mine = await h.attestedGet(quotaHandler, listed, '/api/quota', { installId: listed.installId });
+    assert.equal(mine.statusCode, 200, mine.body);
+    assert.equal(mine.json.allowance.tier, 'free');
+    assert.equal(mine.json.allowance.billingEnforced, true);
+    const theirs = await h.attestedGet(quotaHandler, other, '/api/quota', { installId: other.installId });
+    assert.equal(theirs.statusCode, 200, theirs.body);
+    assert.equal(theirs.json.allowance.tier, 'beta');
+    assert.equal(theirs.json.allowance.billingEnforced, false);
+  } finally {
+    for (const [k, v] of [['BILLING_ENFORCED', before.on], ['BILLING_ENFORCED_DEVICES', before.list]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
 // MARK: - Malicious proxy input
 
 test('the proxy refuses tools, extra images, big prompts, other roles and client cache_control', { skip }, async () => {

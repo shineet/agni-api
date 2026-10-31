@@ -6,8 +6,7 @@ import {
 import { authenticate, recordAuth, MeterClass } from './_auth.js';
 import {
   FEATURES, inferFeature, validateModelRequest, hasImage, bucketFor, reservationFor,
-  promptCacheFeatures, withPromptCache, cleanId, metered, allowanceRefusal, sendRefusal,
-  billingEnforced
+  promptCacheFeatures, withPromptCache, cleanId, metered, allowanceRefusal, sendRefusal
 } from './_billing.js';
 import { resolveCaller, entitlementRefusal, limitsFor } from './_caller.js';
 
@@ -110,7 +109,7 @@ export default async function handler(req, res) {
   // THE BETA ALLOWANCE, kept exactly as testers know it until launch: a
   // lifetime count per install, waived for installs marked unlimited.
   let quota = null;
-  if (!billingEnforced()) {
+  if (!caller.enforced) {
     const quotaSubject = auth.keyId || cleanId(installId);
     if (!quotaSubject) return fail(res, 400, AgniError.invalidRequest, 'Missing caller identity.');
     try {

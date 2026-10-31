@@ -4,7 +4,7 @@
 
 import { supabaseRPC } from './_supabase.js';
 import {
-  allowances, billingEnforced, budgetTierFor, cleanId, FEATURES, freeAIEnabled, periodFor, planOf, tierFor
+  allowances, billingEnforced, billingEnforcedFor, budgetTierFor, cleanId, FEATURES, freeAIEnabled, periodFor, planOf, tierFor
 } from './_billing.js';
 import { deviceCheckConfigured } from './_devicecheck.js';
 
@@ -31,6 +31,7 @@ export async function resolveCaller(auth, { installId } = {}) {
       budgetTier: 'legacy',
       subject: 'legacy:' + (id || `ip:${auth.ipHash}`),
       subjectKind: 'legacy',
+      enforced: billingEnforced(),
       context: null,
       period: periodFor('legacy', null)
     };
@@ -43,7 +44,10 @@ export async function resolveCaller(auth, { installId } = {}) {
   const context = Array.isArray(rows) ? rows[0] : rows;
   if (!context) throw new Error('caller context missing');
 
-  const tier = tierFor(context);
+  // Per caller, not global: a device listed in BILLING_ENFORCED_DEVICES sees
+  // launch behaviour (Free until it subscribes) while the switch is off.
+  const enforced = billingEnforcedFor(context.device_subject);
+  const tier = tierFor(context, { enforced });
   const subscribed = tier === 'trial' || tier === 'pro';
   return {
     tier,
@@ -51,6 +55,7 @@ export async function resolveCaller(auth, { installId } = {}) {
     budgetTier: budgetTierFor(tier, context),
     subject: subscribed ? context.subscription_subject : context.device_subject,
     subjectKind: subscribed ? 'subscription' : 'device',
+    enforced,
     context,
     period: periodFor(tier, context)
   };
@@ -117,7 +122,7 @@ export async function allowanceStatus(caller) {
   const costUsed = Number(usage.cost_usd || 0);
   return {
     tier: caller.tier,
-    billingEnforced: billingEnforced(),
+    billingEnforced: caller.enforced ?? billingEnforced(),
     plan: planOf(caller.context?.product_id) || null,
     // 'Sandbox' for TestFlight and App Review purchases, so a tester can see
     // which world they are in. Null on Free.

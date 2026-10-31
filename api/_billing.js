@@ -24,6 +24,19 @@ export function billingEnforced() {
   return (process.env.BILLING_ENFORCED || 'false').toLowerCase() === 'true';
 }
 
+/// Devices that get launch behaviour before everyone else, so the paywall and
+/// a Sandbox purchase can be tested on a TestFlight build while every other
+/// tester stays on `beta`. Comma-separated device subjects (`dev:<installId>`)
+/// in BILLING_ENFORCED_DEVICES. An env var, not code: install ids are not
+/// secret, but this repo is public and they are still somebody's phone.
+export function billingEnforcedFor(deviceSubject) {
+  if (billingEnforced()) return true;
+  if (!deviceSubject) return false;
+  return String(process.env.BILLING_ENFORCED_DEVICES || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+    .includes(deviceSubject);
+}
+
 /// Free AI can be stopped on its own, before anything a subscriber pays for.
 export function freeAIEnabled() {
   return (process.env.FREE_AI_ENABLED || 'true').toLowerCase() !== 'false';
