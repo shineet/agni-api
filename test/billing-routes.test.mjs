@@ -303,10 +303,10 @@ test('Pro: 25 photos a day burst guard, with tomorrow as the reset', { skip }, a
 test('Pro: the aggregate cost ceiling stops spend before the counts do, and says so', { skip }, async () => {
   const dev = await h.device();
   const subject = await h.subscribe(dev, { purchase: h.daysFromNow(-3), expires: h.daysFromNow(27) });
-  // Most of the period's $2.50 already spent.
+  // Most of the period's $3.00 already spent.
   const start = (await h.sqlJSON(`select period_start from agni_allowance_periods where subject_id = '${subject}'`))[0];
   await h.estimate(estimateHandler, dev, { feature: 'variant_search', actionId: id('a'), requestId: id('r'), request: search() });
-  await h.sql(`update agni_allowance_periods set cost_usd = 2.47 where subject_id = '${subject}'`);
+  await h.sql(`update agni_allowance_periods set cost_usd = 2.97 where subject_id = '${subject}'`);
   void start;
   const res = await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
   assert.equal(res.statusCode, 402);

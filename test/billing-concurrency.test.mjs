@@ -46,9 +46,9 @@ test('twelve photos at once against a three-photo sample: exactly three are anal
 test('the cost cap holds under a burst: committed cost never passes it', { skip }, async () => {
   const dev = await h.device();
   const subject = await h.subscribe(dev, { purchase: h.daysFromNow(-1), expires: h.daysFromNow(29) });
-  // $0.30 of the $2.50 left: room for a handful of conservative reservations.
+  // $0.30 of the $3.00 left: room for a handful of conservative reservations.
   await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
-  await h.sql(`update agni_allowance_periods set cost_usd = 2.20 where subject_id = '${subject}'`);
+  await h.sql(`update agni_allowance_periods set cost_usd = 2.70 where subject_id = '${subject}'`);
   h.anthropic.fallback = { status: 200, delayMs: 300, usage: { input_tokens: 3000, output_tokens: 600 } };
   try {
     const results = await Promise.all(Array.from({ length: 15 }, () =>
@@ -58,9 +58,9 @@ test('the cost cap holds under a burst: committed cost never passes it', { skip 
     const peak = await h.sqlJSON(`select max(running)::float as peak from (
         select sum(reserved_usd) over (order by created_at) as running
           from agni_usage_events where subject_id = '${subject}' and created_at > now() - interval '1 minute') t`);
-    assert.ok(2.20 + peak[0].peak - 0.0 <= 2.50 + 0.05 * 15, 'sanity');
+    assert.ok(2.70 + peak[0].peak - 0.0 <= 3.00 + 0.05 * 15, 'sanity');
     const [p] = await h.sqlJSON(`select cost_usd::float, open_reservations from agni_allowance_periods where subject_id = '${subject}'`);
-    assert.ok(p.cost_usd <= 2.50, `committed ${p.cost_usd} stays within $2.50`);
+    assert.ok(p.cost_usd <= 3.00, `committed ${p.cost_usd} stays within $3.00`);
     assert.equal(p.open_reservations, 0);
   } finally {
     h.anthropic.fallback = { status: 200, usage: { input_tokens: 3000, output_tokens: 600 } };

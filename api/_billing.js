@@ -68,7 +68,9 @@ export const DEFAULT_ALLOWANCES = {
   // The whole 7-day trial.
   trial: { photo: 25,  search: 25,  web: 3,  costCapUSD: 1.00, burst: 25, dayCostCapUSD: null },
   // Each monthly allowance period, monthly and annual plans alike.
-  pro:   { photo: 100, search: 100, web: 10, costCapUSD: 2.50, burst: 25, dayCostCapUSD: null },
+  // Offer B' (Shine, 2026-10-31): 100/60/5 at $3.00. 100/100/10 cost ~$3.18 for a
+  // typical subscriber, over any cap that leaves the annual plan a margin.
+  pro:   { photo: 100, search: 60,  web: 5,  costCapUSD: 3.00, burst: 25, dayCostCapUSD: null },
   // Testers before launch: no counts, the same daily cost bound as before.
   beta:  { photo: null, search: null, web: null, costCapUSD: null, burst: null, dayCostCapUSD: 1.00 },
   // The shared token: no identity worth an allowance, so a tight daily bound.

@@ -290,13 +290,13 @@ test('the provisional allowances are what was specified', () => {
   assert.deepEqual(
     { photo: DEFAULT_ALLOWANCES.pro.photo, search: DEFAULT_ALLOWANCES.pro.search,
       web: DEFAULT_ALLOWANCES.pro.web, burst: DEFAULT_ALLOWANCES.pro.burst, cost: DEFAULT_ALLOWANCES.pro.costCapUSD },
-    { photo: 100, search: 100, web: 10, burst: 25, cost: 2.5 });
+    { photo: 100, search: 60, web: 5, burst: 25, cost: 3.0 });
 });
 
 test('ALLOWANCES_JSON overrides without a deploy, and bad JSON keeps the defaults', () => {
   process.env.ALLOWANCES_JSON = '{"pro":{"photo":120}}';
   assert.equal(allowances().pro.photo, 120);
-  assert.equal(allowances().pro.search, 100);
+  assert.equal(allowances().pro.search, 60);
   process.env.ALLOWANCES_JSON = '{not json';
   assert.equal(allowances().pro.photo, 100);
   delete process.env.ALLOWANCES_JSON;
