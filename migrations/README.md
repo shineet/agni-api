@@ -20,13 +20,17 @@ Responses carry counts only.
 Every step needs Shine's go-ahead. Nothing here has been run against
 production.
 
-1. **Deploy the server branch** that contains `contributorId`, the admin op
-   and `schema-contributor-migration.sql` (agni-api `launch-privacy-prep`).
-   From then on, new rows are written hashed. *Shine approves the deploy.*
-2. **Apply the SQL**, in the Supabase SQL editor of the Agni project
-   (project ref nglfxnzxseshrklypxhg; check the project name before pasting):
-   `schema-contributor-migration.sql`, then `schema-lockdown.sql`. This
-   creates the backup and count tables and the functions and changes no rows.
+1. **Apply the SQL first**, as part of the whole release: paste
+   `migrations/2026-10-31-release.sql` (one transaction, lockdown last) in the
+   Supabase SQL editor of the Agni project (nglfxnzxseshrklypxhg; check the
+   project name first). It includes `schema-contributor-migration.sql`,
+   creates the backup and count tables and the functions, and changes no rows.
+   The deployed 3ef4e97 server runs unchanged on it. See
+   `docs/release-runbook.md` step 2. *Shine runs it, or approves it.*
+2. **Deploy the server branch** (merge to main and push). From then on, new
+   rows are written hashed. *Shine approves the deploy.* (Order corrected
+   2026-10-31: SQL before server, because the new server's agni_reserve call
+   fails on the old SQL; docs/migration-review.md.)
    *Shine runs it, or approves it.*
 3. **Preview** (read only):
    ```

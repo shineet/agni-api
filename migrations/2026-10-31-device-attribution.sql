@@ -19,8 +19,19 @@
 -- defaults p_device_subject to NULL, so the old server keeps working against
 -- the new SQL. Apply steps 1 to 6, then promote the deploy.
 
+-- UPGRADE OR FRESH. On a fresh database the billing tables do not exist yet
+-- (schema-billing.sql creates them, with these same columns), so every step
+-- here is skipped rather than failing. Found 2026-10-31 by running the
+-- 3ef4e97 test suite against the new SQL from an empty database.
 begin;
-alter table agni_usage_events add column if not exists device_subject text;
-alter table agni_actions      add column if not exists device_subject text;
-create index if not exists agni_usage_events_device on agni_usage_events (subject_id, device_subject);
+do $$
+begin
+  if to_regclass('public.agni_usage_events') is not null then
+    alter table agni_usage_events add column if not exists device_subject text;
+    create index if not exists agni_usage_events_device on agni_usage_events (subject_id, device_subject);
+  end if;
+  if to_regclass('public.agni_actions') is not null then
+    alter table agni_actions add column if not exists device_subject text;
+  end if;
+end $$;
 commit;
