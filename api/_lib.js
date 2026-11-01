@@ -2,7 +2,7 @@
 // it is two endpoints and a fetch, and a dependency tree would be more code to
 // maintain than the thing it serves.
 
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 export const FREE_LIMIT = Number(process.env.FREE_ESTIMATE_LIMIT || 50);
 
@@ -219,6 +219,37 @@ export function contributorId(installId) {
   if (id.length < 8) return '';
   const key = process.env.CONTRIBUTOR_SALT || process.env.IP_HASH_SALT || 'agni-contributor';
   return 'c1:' + createHmac('sha256', key).update('dish-contributor|' + id).digest('hex').slice(0, 32);
+}
+
+/// The Support ID shown in the app: a way for a person to tell me which
+/// records are theirs when they write in. It LOCATES records and authorizes
+/// nothing: no route takes it as a target, a credential or a reason to delete
+/// or export anything (api/_deletion.js derives every target from the signing
+/// key).
+///
+/// Exact encoding, so the app and server match: SHA-256 over the UTF-8 bytes
+/// of "agni-support-v1:" + installId (the id exactly as stored, uppercase UUID
+/// with hyphens); RFC 4648 base32 of the 32-byte digest, alphabet
+/// "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", most significant bit first, no padding;
+/// the first 10 characters; prefixed "AG-".
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+export function base32(bytes) {
+  let bits = 0, value = 0, out = '';
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    value &= (1 << bits) - 1;
+  }
+  if (bits > 0) out += BASE32[(value << (5 - bits)) & 31];
+  return out;
+}
+export function supportId(installId) {
+  const digest = createHash('sha256').update('agni-support-v1:' + String(installId), 'utf8').digest();
+  return 'AG-' + base32(digest).slice(0, 10);
 }
 
 /// Records one person's version of a dish. Their own previous answer for the

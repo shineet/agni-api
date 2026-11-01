@@ -300,6 +300,7 @@ export async function companionHandler(req, res) {
       // ITS OWN SUBJECT. The companion never touches a photo or search
       // allowance, a Free sample or a subscriber's monthly cost cap.
       subject: 'cmp:' + caller.subject, subjectKind: caller.subjectKind,
+      deviceSubject: caller.deviceSubject,
       tier: 'companion', budgetTier: 'companion', authPath: auth.path,
       feature: 'companion', bucket: 'companion', counts: false,
       actionId: requestId, requestId, model: COMPANION_MODEL,

@@ -617,7 +617,8 @@ export function cleanId(value) {
 /// `ambiguous` means nobody can know whether the provider billed (a timeout or
 /// a connection lost mid-flight), so the reservation is kept as the cost.
 export async function metered({ subject, subjectKind, tier, budgetTier, authPath, feature, bucket, counts,
-                                actionId, requestId, model, period, reserveUSD, limits: given }, call) {
+                                actionId, requestId, model, period, reserveUSD, limits: given,
+                                deviceSubject = null }, call) {
   const limits = given || allowances()[tier] || allowances().legacy;
   const limit = limits[bucket] ?? null;
 
@@ -643,7 +644,10 @@ export async function metered({ subject, subjectKind, tier, budgetTier, authPath
     p_max_calls_per_action: MAX_CALLS_PER_ACTION,
     p_stale_seconds: STALE_RESERVATION_SECONDS,
     p_budget_tier: budgetTier || tier,
-    p_max_open: limits.maxOpen ?? MAX_OPEN_RESERVATIONS
+    p_max_open: limits.maxOpen ?? MAX_OPEN_RESERVATIONS,
+    // Which device made the call, so one device can delete only its own
+    // share of a subscription's pooled history.
+    p_device_subject: deviceSubject
   });
   const reservation = Array.isArray(rows) ? rows[0] : rows;
   if (!reservation) throw new Error('reserve returned nothing');

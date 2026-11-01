@@ -74,7 +74,7 @@ export function freshDatabase(label) {
      alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;`]);
   for (const file of ['schema.sql', 'schema-attest.sql', 'schema-limits.sql', 'schema-auth.sql',
                       'schema-variants.sql', 'schema-community.sql', 'schema-misses.sql',
-                      'schema-ingredient-cache.sql', 'schema-beta.sql', 'schema-billing.sql', 'schema-retention.sql',
+                      'schema-ingredient-cache.sql', 'schema-beta.sql', 'schema-billing.sql', 'schema-deletion.sql', 'schema-retention.sql',
                       'schema-contributor-migration.sql',
                       'schema-lockdown.sql']) {
     execFileSync(PSQL, [dbURL(database), '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.join(ROOT, file)],
@@ -101,6 +101,10 @@ function literal(value) {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL';
+  // A list of strings is a Postgres text[], as PostgREST passes it.
+  if (Array.isArray(value) && value.every(v => typeof v === 'string')) {
+    return value.length ? `ARRAY[${value.map(literal).join(', ')}]::text[]` : `ARRAY[]::text[]`;
+  }
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return `'${text.replace(/'/g, "''")}'`;
 }

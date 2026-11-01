@@ -6,6 +6,7 @@ import { cleanId, raiseAlert } from './_billing.js';
 import { verifyAppStoreJWS, transactionState, upsertSubscription, handleNotification } from './_storekit.js';
 import { deviceCheckConfigured, queryBits, setBits } from './_devicecheck.js';
 import { contribMigration } from './_contrib-migration.js';
+import { deleteData } from './_deletion.js';
 
 /// The account endpoint: allowance, subscription sync and App Store
 /// notifications. One function, because Vercel's Hobby plan counts them and
@@ -19,6 +20,11 @@ import { contribMigration } from './_contrib-migration.js';
 ///                                         root, linked to this install
 ///   POST /api/app-store-notifications     App Store Server Notifications V2
 ///                                         (rewritten here as ?op=notify)
+///   POST /api/quota?op=delete-data        the person deletes what the server
+///                                         holds about this phone, or (as the
+///                                         purchaser) their subscription's
+///                                         history. App Attest only; see
+///                                         api/_deletion.js
 ///   POST /api/quota?op=contrib-migrate    one-off admin conversion of stored
 ///                                         install ids to contributor hashes
 ///                                         (BETA_ADMIN_TOKEN; migrations/README.md)
@@ -46,11 +52,11 @@ export default async function handler(req, res) {
     path: '/api/quota',
     query: req.query || {},
     rawBody,
-    // Subscription sync is attested only. The shared token can never tie a
-    // purchase to an install.
-    allowLegacy: !(req.method === 'POST' && op === 'sync')
+    // Subscription sync and deletion are attested only. The shared token can
+    // never tie a purchase to an install, or prove whose records are whose.
+    allowLegacy: !(req.method === 'POST' && (op === 'sync' || op === 'delete-data'))
   });
-  recordAuth(op === 'sync' ? 'quota-sync' : 'quota', auth, req);
+  recordAuth(op === 'sync' ? 'quota-sync' : op === 'delete-data' ? 'quota-delete' : 'quota', auth, req);
   if (!auth.ok) {
     if (auth.retryAfter > 0) res.setHeader('retry-after', String(auth.retryAfter));
     return json(res, auth.status || 401,
@@ -58,6 +64,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST' && op === 'sync') return sync(req, res, auth, body);
+  if (req.method === 'POST' && op === 'delete-data') return deleteData(req, res, auth, body);
   if (req.method === 'GET') return status(req, res, auth);
   return json(res, 405, { error: { type: 'invalidRequest', message: 'Method not allowed.' } });
 }

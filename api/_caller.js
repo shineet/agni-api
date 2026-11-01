@@ -31,6 +31,7 @@ export async function resolveCaller(auth, { installId } = {}) {
       budgetTier: 'legacy',
       subject: 'legacy:' + (id || `ip:${auth.ipHash}`),
       subjectKind: 'legacy',
+      deviceSubject: null,
       enforced: billingEnforced(),
       context: null,
       period: periodFor('legacy', null)
@@ -55,6 +56,9 @@ export async function resolveCaller(auth, { installId } = {}) {
     budgetTier: budgetTierFor(tier, context),
     subject: subscribed ? context.subscription_subject : context.device_subject,
     subjectKind: subscribed ? 'subscription' : 'device',
+    // Always the device, whichever subject is charged: recorded on every
+    // usage row so a device's own history can be told apart.
+    deviceSubject: context.device_subject || null,
     enforced,
     context,
     period: periodFor(tier, context)

@@ -167,6 +167,10 @@ create table if not exists agni_usage_events (
   primary key (subject_id, request_id)
 );
 alter table agni_usage_events enable row level security;
+-- Device attribution (2026-10-31): see agni_reserve's p_device_subject.
+alter table agni_usage_events add column if not exists device_subject text;
+alter table agni_actions add column if not exists device_subject text;
+create index if not exists agni_usage_events_device on agni_usage_events (subject_id, device_subject);
 create index if not exists agni_usage_events_open on agni_usage_events (created_at) where status = 'reserved';
 create index if not exists agni_usage_events_day on agni_usage_events (day);
 
@@ -447,6 +451,10 @@ $$;
 -- 'sandbox'.
 drop function if exists agni_reserve(text, text, text, text, text, text, boolean, text, text, text,
   timestamptz, timestamptz, integer, numeric, numeric, integer, integer, numeric, integer, integer);
+-- The 22-argument version, before p_device_subject (2026-10-31). Dropped so
+-- the call below cannot be ambiguous between the two.
+drop function if exists agni_reserve(text, text, text, text, text, text, boolean, text, text, text,
+  timestamptz, timestamptz, integer, numeric, numeric, integer, integer, numeric, integer, integer, text, integer);
 create or replace function agni_reserve(
   p_subject              text,
   p_subject_kind         text,
@@ -469,7 +477,12 @@ create or replace function agni_reserve(
   p_max_calls_per_action integer,
   p_stale_seconds        integer,
   p_budget_tier          text default null,
-  p_max_open             integer default null   -- calls in flight per subject; null = none
+  p_max_open             integer default null,  -- calls in flight per subject; null = none
+  -- WHICH DEVICE MADE THE CALL. Pro usage is pooled on the subscription
+  -- subject across every device on it; this lets one device delete only its
+  -- own history (schema-deletion.sql). Null for legacy callers and for every
+  -- row written before 2026-10-31, and never inferred afterwards.
+  p_device_subject       text default null
 ) returns table (allowed boolean, reason text, credited boolean, used integer,
                  lim integer, period_cost numeric, retry_after integer, alert text)
 language plpgsql
@@ -620,13 +633,17 @@ begin
 
   -- ALLOWED. Everything below is one write, under the locks taken above.
   insert into agni_usage_events (subject_id, request_id, action_id, feature, bucket, counts,
-                                 tier, auth_path, model, period_start, day, credited, reserved_usd)
+                                 tier, auth_path, model, period_start, day, credited, reserved_usd,
+                                 device_subject)
   values (p_subject, p_request_id, p_action_id, p_feature, p_bucket, p_counts,
-          bt, p_auth_path, p_model, p_period_start, today, need_credit, p_reserve_usd);
+          bt, p_auth_path, p_model, p_period_start, today, need_credit, p_reserve_usd,
+          p_device_subject);
 
   if p_action_id is not null then
-    insert into agni_actions (subject_id, action_id, bucket, period_start, calls, credited)
-    values (p_subject, p_action_id, p_bucket, p_period_start, 1, need_credit)
+    -- The first call's device owns the action row; a later call on the same
+    -- action (a part, a retry) does not move it.
+    insert into agni_actions (subject_id, action_id, bucket, period_start, calls, credited, device_subject)
+    values (p_subject, p_action_id, p_bucket, p_period_start, 1, need_credit, p_device_subject)
     on conflict (subject_id, action_id, bucket) do update
       set calls = agni_actions.calls + 1,
           credited = agni_actions.credited or excluded.credited,

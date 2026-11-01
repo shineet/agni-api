@@ -258,6 +258,7 @@ export default async function handler(req, res) {
   try {
     result = await metered({
       subject: caller.subject, subjectKind: caller.subjectKind, tier: caller.tier,
+      deviceSubject: caller.deviceSubject,
       budgetTier: caller.budgetTier,
       authPath: auth.path, feature: 'research', bucket: retrieve ? 'web' : 'search', counts: true,
       actionId, requestId, model: MODEL, period: caller.period, reserveUSD,
