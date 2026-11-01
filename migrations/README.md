@@ -77,3 +77,22 @@ preview writing nothing; counts-only responses; apply producing exactly
 `contributorId()` with twin merges and the backup; idempotent re-apply;
 rollback to the exact prior rows and re-apply; and lockdown of the new tables
 and functions.
+
+# Deletion, retention and test-dish cleanup (PREPARED 2026-10-31, NOT RUN)
+
+**SQL first, then the server.** The new server calls `agni_reserve` with
+`p_device_subject`. The new SQL accepts calls with or without it, but the old
+SQL does not know it. So apply the SQL before promoting the deploy:
+
+1. `migrations/2026-10-31-device-attribution.sql`
+2. `schema-billing.sql`
+3. `schema-deletion.sql`
+4. `schema-retention.sql`
+5. `schema-dish-cleanup.sql` (only if the cleanup is approved)
+6. `schema-lockdown.sql` (last)
+
+Then promote the server deploy. Nothing in these files deletes data. The
+deletion functions run only when a person asks in the app. The retention and
+beta-email functions are dry runs unless called with `false`, and nothing
+schedules them. The dish cleanup runs only through its admin op, with the 33
+pairs listed in `docs/readonly-queries/test-dish-cleanup-proposal.md`.
