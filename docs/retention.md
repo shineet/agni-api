@@ -20,7 +20,7 @@ it is not applied to production and not scheduled. The privacy policy must not q
 | agni_subjects (subscriptions) | purchase / refund / fraud | 400 days after it ended (expiry past grace, or revocation) | Late refunds and chargebacks still find it; a restore after that recreates it from Apple's signed transaction. Links lose the subscription; the device keeps its link. |
 | agni_subjects (devices), agni_key_links, agni_attest_keys | fraud / Free-sample abuse | NOT deleted yet | Deleting an attest key makes that phone's next request fail with "key is not registered"; the app's recovery has not been verified on a device. Proposed once verified: 400 days after the key was last seen. |
 | agni_installs (legacy token path) | legacy | delete 90 days after LEGACY_TOKEN_ENABLED=false | Only builds before App Attest use it. Not in the function (needs the env state). |
-| agni_beta_signups | legacy, has email | Shine's decision | Suggest deleting 90 days after launch, or on request. Not in the function. |
+| agni_beta_signups | legacy, has email | 90 days after launch (proposed), or earlier on a verified request | `agni_beta_signup_cleanup(p_launch_date, p_dry_run default true)`: does nothing before launch + 90 days, then deletes signups older than 90 days. A verified request (the person writes from that address) is deleted by hand. |
 | agni_dish_submissions, agni_dish_misses | product data | kept while the table is used | Contributor hash since 91bc943: pseudonymous, not anonymous. The server can recompute it from an install id, so it stays linkable by whoever holds the secret; it only removes the raw id from beside dish data. |
 
 ## Scheduling (not wired)
@@ -39,3 +39,19 @@ Run it once with the default dry run first and compare the counts with expectati
 Deleted rows persist in Supabase's automatic backups until those age out. The backup window is set by the plan and
 is not visible from this repo: UNKNOWN until checked in Supabase > Database > Backups (Pro is expected to keep
 7 days of daily backups). The policy should say deleted records leave backups within that window, once confirmed.
+
+
+## Verified to survive a real run (test/retention.test.mjs, 2026-10-31)
+
+- Open reservations, however old.
+- Active subscriptions; subscriptions in a billing grace period; subscriptions in billing retry (expired 55 days ago, auto-renew on); subscriptions refunded within 400 days.
+- The current allowance period's counters; the open-ended Free period (the sample counter).
+- Free-sample markers on device subjects; App Attest keys; key links to a subscription still inside its window.
+- Device subjects (never touched).
+
+## Periods worth a second look
+
+- **agni_actions, 180 days by creation date.** For a subscriber this is always a past period (allowance periods are monthly, annual plans included). For a Free install, whose sample period never ends, a sample action older than 180 days is deleted. The only effect: retrying that exact request more than 180 days later would be charged again. Acceptable, and no reason to keep them longer.
+- **Ended subscriptions, 400 days.** This covers Apple's refund window and annual reconciliation. A refund notice arriving later still carries Apple's signed transaction and recreates the record. Keep 400 unless real notices show later refunds.
+- **agni_store_notifications, 400 days from receipt.** Deduplication needs days. An active multi-year subscription loses its oldest notices; nothing reads them, because the subject row holds the current state.
+- No proposed period needed to change for correctness. The schedule is still not applied, and the policy must not quote any period until it runs.

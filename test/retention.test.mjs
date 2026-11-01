@@ -106,3 +106,53 @@ test('only the service role can run it', { skip }, async () => {
                                    or has_function_privilege('authenticated', 'agni_retention_cleanup(boolean)', 'execute')`);
   assert.equal(exposed, 'f');
 });
+
+// MARK: - What must survive, case by case (added 2026-10-31)
+
+test('unresolved and protective records survive a real run', { skip }, async () => {
+  await h.sql(`
+    insert into agni_subjects (subject_id, kind, environment, product_id, expires_date, grace_expires_date, auto_renew) values
+      ('sub:grace', 'subscription', 'Production', 'com.shinethankappan.agni.pro.monthly', ${ago(5)}, now() + interval '10 days', true),
+      ('sub:retry', 'subscription', 'Production', 'com.shinethankappan.agni.pro.monthly', ${ago(55)}, null, true);
+    insert into agni_subjects (subject_id, kind, environment, product_id, expires_date, revocation_date) values
+      ('sub:refund-recent', 'subscription', 'Production', 'com.shinethankappan.agni.pro.annual', now() + interval '200 days', ${ago(100)});
+    insert into agni_subjects (subject_id, kind, free_photo_exhausted, free_search_exhausted) values
+      ('dev:sample-used', 'device', true, true);
+    insert into agni_attest_keys (key_id, public_key_pem, environment, last_seen) values
+      ('key-old-but-needed', 'pem', 'production', ${ago(700)});
+    insert into agni_key_links (key_id, device_subject, subscription_subject, subscription_linked_at) values
+      ('key-old-but-needed', 'dev:sample-used', 'sub:retry', ${ago(90)});
+    insert into agni_usage_events (subject_id, request_id, feature, bucket, tier, auth_path, model, period_start, day, reserved_usd, status, created_at) values
+      ('sub:grace', 'r-open-old', 'photo', 'photo', 'pro', 'attest', 'm', ${ago(300)}, (${ago(300)})::date, 0.01, 'reserved', ${ago(300)});
+    insert into agni_allowance_periods (subject_id, period_start, period_end, tier, photo_used) values
+      ('sub:grace', ${ago(25)}, now() + interval '5 days', 'pro', 12),
+      ('dev:sample-used', ${ago(1000)}, 'infinity', 'free', 3);
+  `);
+  await counts(false);
+  assert.equal(await h.sql(`select string_agg(subject_id, ',' order by subject_id) from agni_subjects
+                             where subject_id in ('sub:grace', 'sub:retry', 'sub:refund-recent')`),
+               'sub:grace,sub:refund-recent,sub:retry',
+               'in grace, in billing retry and refunded within 400 days are all kept (restores and refunds still resolve)');
+  const [dev] = await h.sqlJSON(`select free_photo_exhausted, free_search_exhausted from agni_subjects where subject_id = 'dev:sample-used'`);
+  assert.deepEqual(dev, { free_photo_exhausted: true, free_search_exhausted: true }, 'Free-sample markers are an abuse control');
+  assert.equal(await h.sql(`select count(*) from agni_attest_keys where key_id = 'key-old-but-needed'`), '1', 'attest keys are not deleted');
+  assert.equal(await h.sql(`select subscription_subject from agni_key_links where key_id = 'key-old-but-needed'`), 'sub:retry',
+               'a link to a subscription still inside its window stays');
+  assert.equal(await h.sql(`select count(*) from agni_usage_events where request_id = 'r-open-old'`), '1', 'an open reservation is never deleted');
+  assert.equal(await h.sql(`select photo_used from agni_allowance_periods where subject_id = 'sub:grace'`), '12', 'the current period counter stays');
+  assert.equal(await h.sql(`select photo_used from agni_allowance_periods where subject_id = 'dev:sample-used'`), '3',
+               'the open-ended Free period (the sample counter) stays');
+});
+
+test('beta emails: nothing before launch + 90 days; then a dry run counts and a real run deletes only rows older than 90 days', { skip }, async () => {
+  await h.sql(`insert into agni_beta_signups (email, name, created_at) values
+                 ('old@example.com', 'Old', ${ago(200)}), ('new@example.com', 'New', ${ago(10)})`);
+  assert.equal(await h.sql(`select agni_beta_signup_cleanup(current_date - 10, false)`), '0', 'launch was only 10 days ago');
+  assert.equal(await h.sql(`select count(*) from agni_beta_signups`), '2');
+  assert.equal(await h.sql(`select agni_beta_signup_cleanup(current_date - 120)`), '1', 'dry run counts');
+  assert.equal(await h.sql(`select count(*) from agni_beta_signups`), '2', 'and deletes nothing');
+  assert.equal(await h.sql(`select agni_beta_signup_cleanup(current_date - 120, false)`), '1');
+  assert.equal(await h.sql(`select string_agg(email, ',') from agni_beta_signups`), 'new@example.com');
+  const exposed = await h.sql(`select has_function_privilege('anon', 'agni_beta_signup_cleanup(date, boolean)', 'execute')`);
+  assert.equal(exposed, 'f');
+});

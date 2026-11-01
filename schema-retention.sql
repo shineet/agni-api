@@ -138,3 +138,31 @@ begin
   record := 'agni_subjects (ended subscriptions)'; rows := n; return next;
 end;
 $$;
+
+-- MARK: - Beta invitation emails
+
+-- The TestFlight sign-up form kept an email address and name (agni_beta_signups).
+-- Proposed: delete them 90 days after launch, or earlier on a verified request.
+-- A verified request is handled by hand: the person writes from that address,
+-- which is the proof they own it, and the row is deleted. This function only
+-- covers the time rule. DRY RUN BY DEFAULT; nothing happens before
+-- launch + 90 days whatever the dry-run flag says.
+create or replace function agni_beta_signup_cleanup(p_launch_date date, p_dry_run boolean default true)
+returns bigint
+language plpgsql
+security definer
+as $$
+declare
+  n bigint;
+begin
+  if p_launch_date is null or current_date < p_launch_date + 90 then
+    return 0;
+  end if;
+  select count(*) into n from agni_beta_signups where created_at < now() - interval '90 days';
+  if not p_dry_run then
+    delete from agni_beta_signups where created_at < now() - interval '90 days';
+  end if;
+  return n;
+end;
+$$;
+
