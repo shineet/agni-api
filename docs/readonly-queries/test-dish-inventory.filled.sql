@@ -34,13 +34,13 @@
 begin read only;
 
 with test_installs(contributor) as (
-  values ('42A5F948-3CF6-4898-86FB-1A2B0879F7A0') -- sim AgniSE3 (self-tests to Oct 26),
-         ('1DF058F8-F6A1-40A4-A8E6-F49C9E707F49') -- sim iPhone 17 (self-tests Sep 22),
-         ('05F7BACD-A5F2-404F-B087-11564CBB2659') -- sim iPhone 17 Pro (self-tests Oct 31),
-         ('13923BC8-6341-47C7-9C86-C87506BC5250') -- sim iPhone 16e (self-tests Oct 8),
-         ('E01AEE34-0681-4687-97B5-DEDF5358FACB') -- sim iPhone 17e F9E5 (self-tests Oct 31),
-         ('3763FC69-50AE-41F8-944A-F1EE0BD8EFCA') -- sim iPhone Air (no self-test history; id may be new),
-         ('F0287485-6B98-4B2A-A1E4-B9D68695CB4D') -- sim iPhone 17 Pro Max (no history; id may be new),
+  values ('42A5F948-3CF6-4898-86FB-1A2B0879F7A0'), -- sim AgniSE3 (self-tests to Oct 26)
+         ('1DF058F8-F6A1-40A4-A8E6-F49C9E707F49'), -- sim iPhone 17 (self-tests Sep 22)
+         ('05F7BACD-A5F2-404F-B087-11564CBB2659'), -- sim iPhone 17 Pro (self-tests Oct 31)
+         ('13923BC8-6341-47C7-9C86-C87506BC5250'), -- sim iPhone 16e (self-tests Oct 8)
+         ('E01AEE34-0681-4687-97B5-DEDF5358FACB'), -- sim iPhone 17e F9E5 (self-tests Oct 31)
+         ('3763FC69-50AE-41F8-944A-F1EE0BD8EFCA'), -- sim iPhone Air (no self-test history; id may be new)
+         ('F0287485-6B98-4B2A-A1E4-B9D68695CB4D'), -- sim iPhone 17 Pro Max (no history; id may be new)
          ('7DD0B35D-C3F6-4028-BDCD-458CE86C93E8') -- sim iPhone 17e A128 (no history; id may be new)
 ),
 windows(starts, ends, label) as (
@@ -81,13 +81,13 @@ rollback;
 begin read only;
 
 with test_installs(contributor) as (
-  values ('42A5F948-3CF6-4898-86FB-1A2B0879F7A0') -- sim AgniSE3 (self-tests to Oct 26),
-         ('1DF058F8-F6A1-40A4-A8E6-F49C9E707F49') -- sim iPhone 17 (self-tests Sep 22),
-         ('05F7BACD-A5F2-404F-B087-11564CBB2659') -- sim iPhone 17 Pro (self-tests Oct 31),
-         ('13923BC8-6341-47C7-9C86-C87506BC5250') -- sim iPhone 16e (self-tests Oct 8),
-         ('E01AEE34-0681-4687-97B5-DEDF5358FACB') -- sim iPhone 17e F9E5 (self-tests Oct 31),
-         ('3763FC69-50AE-41F8-944A-F1EE0BD8EFCA') -- sim iPhone Air (no self-test history; id may be new),
-         ('F0287485-6B98-4B2A-A1E4-B9D68695CB4D') -- sim iPhone 17 Pro Max (no history; id may be new),
+  values ('42A5F948-3CF6-4898-86FB-1A2B0879F7A0'), -- sim AgniSE3 (self-tests to Oct 26)
+         ('1DF058F8-F6A1-40A4-A8E6-F49C9E707F49'), -- sim iPhone 17 (self-tests Sep 22)
+         ('05F7BACD-A5F2-404F-B087-11564CBB2659'), -- sim iPhone 17 Pro (self-tests Oct 31)
+         ('13923BC8-6341-47C7-9C86-C87506BC5250'), -- sim iPhone 16e (self-tests Oct 8)
+         ('E01AEE34-0681-4687-97B5-DEDF5358FACB'), -- sim iPhone 17e F9E5 (self-tests Oct 31)
+         ('3763FC69-50AE-41F8-944A-F1EE0BD8EFCA'), -- sim iPhone Air (no self-test history; id may be new)
+         ('F0287485-6B98-4B2A-A1E4-B9D68695CB4D'), -- sim iPhone 17 Pro Max (no history; id may be new)
          ('7DD0B35D-C3F6-4028-BDCD-458CE86C93E8') -- sim iPhone 17e A128 (no history; id may be new)
 ),
 windows(starts, ends, label) as (
