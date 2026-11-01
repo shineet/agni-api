@@ -659,8 +659,17 @@ begin
                    when 'trial' then cfg.trial_share
                    when 'sandbox' then cfg.trial_share
                    when 'companion' then cfg.free_share
+                   -- Expressed as a share so pro's limit is hard_max_ceiling_usd.
+                   when 'pro' then greatest(1, cfg.hard_max_ceiling_usd / greatest(b.ceiling_usd, 0.000001))
                    else 1 end;
 
+  -- PAYING USERS ARE NOT ROUTINE CASUALTIES OF THE DAILY CEILING. Free,
+  -- legacy, trial, Sandbox and the companion stop at their share of the
+  -- dynamic ceiling, so they can never use more than trial_share of it. A
+  -- Production subscriber ('pro') stops only at hard_max_ceiling_usd: their
+  -- own spend is already bounded per period (costCapUSD) and per day (burst),
+  -- and they are what the ceiling grows from. An operator can still stop
+  -- everyone by lowering hard_max_ceiling_usd.
   if total + p_reserve_usd > b.ceiling_usd * share
      or (bt = 'legacy' and b.legacy_usd + p_reserve_usd > cfg.legacy_day_cap_usd)
      or (bt = 'sandbox' and b.sandbox_usd + p_reserve_usd > cfg.sandbox_day_cap_usd)

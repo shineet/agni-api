@@ -538,6 +538,27 @@ test('the ceiling degrades Free first, keeps Pro, and alerts once', { skip }, as
   await h.sql(`delete from agni_budget_days where day = '${today}'`);
 });
 
+test('a full day ceiling pauses trials but not subscribers; subscribers stop only at the hard maximum', { skip }, async () => {
+  const today = (await h.sql(`select (now() at time zone 'utc')::date`));
+  await h.sql(`delete from agni_budget_days where day = '${today}'`);
+  // The day's total is already past the whole ceiling.
+  await h.sql(`insert into agni_budget_days (day, ceiling_usd, trial_usd, paid_usd) values ('${today}', 10, 6, 6)`);
+  const trial = await h.device();
+  await h.subscribe(trial, { purchase: h.daysFromNow(-1), expires: h.daysFromNow(6), trial: true });
+  const t = await h.estimate(estimateHandler, trial, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
+  assert.equal(t.statusCode, 503, 'trial pauses at its share');
+  const pro = await h.device();
+  await h.subscribe(pro, { purchase: h.daysFromNow(-3), expires: h.daysFromNow(27) });
+  const p = await h.estimate(estimateHandler, pro, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
+  assert.equal(p.statusCode, 200, 'a subscriber is not stopped by the dynamic ceiling');
+  // At the hard maximum everyone stops, subscribers included.
+  const max = Number((await h.sqlJSON(`select hard_max_ceiling_usd from agni_budget_config where id = 1`))[0].hard_max_ceiling_usd);
+  await h.sql(`update agni_budget_days set paid_usd = ${max} where day = '${today}'`);
+  const stopped = await h.estimate(estimateHandler, pro, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
+  assert.equal(stopped.statusCode, 503, 'the hard maximum still stops a subscriber');
+  await h.sql(`delete from agni_budget_days where day = '${today}'`);
+});
+
 test('the ceiling is bounded: free installs never raise it, paid subscribers raise it within the growth bound', { skip }, async () => {
   const tomorrow = await h.sql(`select ((now() at time zone 'utc')::date + 30)`);
   // Yesterday's ceiling 25; 10,000 verified paid subscribers would ask for $1,025.
