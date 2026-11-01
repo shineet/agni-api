@@ -307,11 +307,16 @@ test('Pro: the aggregate cost ceiling stops spend before the counts do, and says
   // Most of the period's $3.00 already spent.
   const start = (await h.sqlJSON(`select period_start from agni_allowance_periods where subject_id = '${subject}'`))[0];
   await h.estimate(estimateHandler, dev, { feature: 'variant_search', actionId: id('a'), requestId: id('r'), request: search() });
-  await h.sql(`update agni_allowance_periods set cost_usd = 2.97 where subject_id = '${subject}'`);
+  const { DEFAULT_ALLOWANCES } = await import('../api/_billing.js');
+  await h.sql(`update agni_allowance_periods set cost_usd = ${DEFAULT_ALLOWANCES.pro.costCapUSD - 0.03} where subject_id = '${subject}'`);
+  const alert = () => h.sqlJSON(`select detail from agni_alerts where kind = 'cost_cap_before_counts'`);
   void start;
   const res = await h.estimate(estimateHandler, dev, { feature: 'photo', actionId: id('a'), requestId: id('r'), request: photo() });
   assert.equal(res.statusCode, 402);
   assert.equal(res.json.allowance.bucket, 'cost');
+  const alerts = await alert();
+  assert.equal(alerts.length, 1, 'the operator is told the cap stopped someone with credits left');
+  assert.equal(alerts[0].detail.subject_id, undefined, 'no subject in the alert');
 });
 
 test('expired, refunded and revoked subscriptions fall back to Free', { skip }, async () => {

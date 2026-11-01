@@ -287,11 +287,12 @@ test('the provisional allowances are what was specified', () => {
   assert.deepEqual(
     { photo: DEFAULT_ALLOWANCES.trial.photo, search: DEFAULT_ALLOWANCES.trial.search,
       web: DEFAULT_ALLOWANCES.trial.web, cost: DEFAULT_ALLOWANCES.trial.costCapUSD },
-    { photo: 25, search: 25, web: 3, cost: 1.0 });
+    { photo: 25, search: 25, web: 3, cost: 2.0 });
   assert.deepEqual(
     { photo: DEFAULT_ALLOWANCES.pro.photo, search: DEFAULT_ALLOWANCES.pro.search,
       web: DEFAULT_ALLOWANCES.pro.web, burst: DEFAULT_ALLOWANCES.pro.burst, cost: DEFAULT_ALLOWANCES.pro.costCapUSD },
-    { photo: 100, search: 60, web: 5, burst: 25, cost: 3.0 });
+    { photo: 100, search: 60, web: 5, burst: 25, cost: 6.0 });
+  assert.equal(DEFAULT_ALLOWANCES.free.costCapUSD, 0.75);
 });
 
 test('ALLOWANCES_JSON overrides without a deploy, and bad JSON keeps the defaults', () => {

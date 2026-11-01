@@ -599,6 +599,15 @@ begin
     return;
   end if;
   if p_cost_cap is not null and p.cost_usd + p_reserve_usd > p_cost_cap then
+    -- The cost cap is a safeguard sized above the advertised counts. If it
+    -- stops someone with credits left, the operator hears about it (once a
+    -- day; no subject in the alert) and can restore them.
+    if p_limit is not null and used_now < p_limit and not exists (
+         select 1 from agni_alerts where kind = 'cost_cap_before_counts' and at >= date_trunc('day', now_ts)) then
+      insert into agni_alerts (kind, detail) values ('cost_cap_before_counts',
+        jsonb_build_object('tier', p_tier, 'bucket', p_bucket, 'used', used_now, 'limit', p_limit,
+                           'cost_usd', p.cost_usd, 'cap_usd', p_cost_cap));
+    end if;
     return query select false, 'budget'::text, false, used_now, p_limit, p.cost_usd, until_end, null::text;
     return;
   end if;
