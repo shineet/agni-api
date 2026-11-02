@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto';
 import { supabaseRPC } from './_supabase.js';
 import { report } from './_lib.js';
+import { waitUntil } from '@vercel/functions';
 
 // MARK: - Switches
 
@@ -614,6 +615,30 @@ export function cleanId(value) {
 
 // MARK: - Reserve and settle
 
+/// Keeps the function running until a call's cost is recorded.
+///
+/// WHY (build 178 device test, 2026-11-02). A streamed answer ends the
+/// response before `settle` runs, and Vercel pauses a function once its
+/// response has closed. The settle request then hung until its 10 s timeout,
+/// or until another request happened to wake the same instance: 4 of 14 calls
+/// stalled, 2 expired at their full reservation and handed back credits for
+/// answers that had been delivered. `waitUntil` is Vercel's supported way to
+/// extend a request past its response (docs: functions-api-reference,
+/// vercel-functions-package); the promise shares the function's maxDuration.
+///
+/// REGISTERED BEFORE THE CALL, not after it: the stream can close the response
+/// inside the call, and a promise handed over after that point may be too late
+/// to stop the pause. Outside Vercel (tests, local) waitUntil has no request
+/// context and does nothing.
+let keepAlive = (promise) => {
+  try { waitUntil(promise); } catch (error) { report('waitUntil', error); }
+};
+
+/// Tests only: observe what is kept alive instead of handing it to Vercel.
+export function setKeepAliveForTests(fn) {
+  keepAlive = fn || ((promise) => { try { waitUntil(promise); } catch {} });
+}
+
 /// Reserves, calls, settles. The single path every paid provider call takes.
 ///
 /// `call` makes the provider request and returns
@@ -658,6 +683,16 @@ export async function metered({ subject, subjectKind, tier, budgetTier, authPath
   if (reservation.alert) raiseAlert(reservation.alert, { tier, feature });
   if (!reservation.allowed) return { refused: reservation, limits, limit };
 
+  // Held until the cost is recorded, both settle attempts included.
+  let recorded;
+  keepAlive(new Promise((resolve) => { recorded = resolve; }));
+  try {
+    return await callAndSettle();
+  } finally {
+    recorded();
+  }
+
+  async function callAndSettle() {
   let outcome;
   try {
     // The reservation is handed over so a streamed call can report what is
@@ -682,6 +717,7 @@ export async function metered({ subject, subjectKind, tier, budgetTier, authPath
   });
 
   return { outcome, reservation, limits, limit, actualUSD: round6(actual) };
+  }
 }
 
 /// Two attempts. If both fail the reservation stands as the cost and expires
