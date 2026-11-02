@@ -8,7 +8,7 @@ Every step needs Shine's explicit go. Each one ends with a verification and name
 
 ## 1. Local preparation (Claude, no external effect)
 
-- [ ] On `launch-privacy-prep`, run the full suite. Expected: all pass except `fatsecret.test.mjs` (route parked in September) and the 2 app-body skips.
+- [ ] On `launch-privacy-prep`, run the full suite. Expected (2026-11-02, 36b8167): 292 of 295 pass; the failure is `fatsecret.test.mjs` (route parked in September) and the 2 skips are app-body tests.
 - [ ] `node scripts/build-release-sql.mjs`, then `git diff --exit-code migrations/2026-10-31-release.sql`. It must be unchanged.
 - [ ] Record the rollback target: Vercel deployment for 3ef4e97 = `dpl_4RPGpXMBUDTkfUqctbMnKdPpMozk`.
 - [ ] Confirm today's Supabase daily backup exists (Database > Backups) before step 2.
@@ -27,7 +27,13 @@ Every step needs Shine's explicit go. Each one ends with a verification and name
    where n.nspname = 'public' and p.proname like 'agni%'
      and (has_function_privilege('anon', p.oid, 'execute')
           or has_function_privilege('authenticated', p.oid, 'execute'));                      -- 0
+  -- Added 2026-11-02 (offer, early-stop recovery):
+  select count(*) from information_schema.columns
+   where table_name = 'agni_allowance_periods' and column_name = 'cost_cap_grant_usd';        -- 1
+  select count(*) from pg_class where relname = 'agni_cost_cap_stops';                         -- 1
+  select count(*) from pg_proc where proname in ('agni_cost_cap_restore', 'agni_cost_cap_stops_list'); -- 2
   ```
+- Between this step and step 4, the CURRENT server reads an early cost-safeguard stop as "AI analysis is unavailable right now" (it does not know the new reason). Keep the gap short.
 - [ ] Smoke test the CURRENT server: an attested photo on a TestFlight build still works. Expected, because 3ef4e97 runs on the new SQL (212 of 215, its own baseline).
 - **Rollback point:** none needed. **Never re-apply 3ef4e97 SQL files**: they recreate a second `agni_reserve` and break every request.
 
@@ -38,6 +44,7 @@ Every step needs Shine's explicit go. Each one ends with a verification and name
 
 ## 4. Server deployment (Vercel, automatic on push)
 
+- [ ] BEFORE the push in step 3, Shine sets `RATE_PER_DAY` = `150` for Production in Vercel (Settings > Environment Variables). It takes effect with the deployment the push creates.
 - [ ] Wait until the new deployment is READY (Vercel MCP `list_deployments`).
 - [ ] Smoke tests:
   - `GET /api/attest` 200;
@@ -45,6 +52,7 @@ Every step needs Shine's explicit go. Each one ends with a verification and name
   - `POST /api/quota?op=delete-data` without a signature 401;
   - `POST /api/app-store-notifications` with no body 400.
 - [ ] One attested photo from a TestFlight build succeeds. `agni_usage_events` gains a row with `device_subject` set.
+- [ ] Shine, in his own shell: `POST /api/quota?op=cost-cap-stops` with `x-admin-token` returns 200 and `"stops": []`; without the header, 401 (docs/cost-cap-restore.md).
 - **Rollback point:** Vercel instant rollback, or promote `dpl_4RPGpXMBUDTkfUqctbMnKdPpMozk`. The SQL stays as it is (compatible). Rows already written keep `device_subject` (harmless).
 
 ## 5. Contributor conversion (admin op; Shine supplies the token from his password manager to his own shell)
