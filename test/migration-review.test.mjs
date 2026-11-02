@@ -92,7 +92,7 @@ function dataFingerprint() {
     // Only the columns that existed at 3ef4e97 for tables that gain columns,
     // so "unchanged data" means the old values, not the new NULL column.
     out[t] = run(`select count(*) || ':' || coalesce(md5(string_agg(x, '|' order by x)), '-') from
-      (select (to_jsonb(t) - 'device_subject')::text as x from ${t} t) s`);
+      (select (to_jsonb(t) - 'device_subject' - 'cost_cap_grant_usd')::text as x from ${t} t) s`);
   }
   return out;
 }
@@ -226,7 +226,11 @@ test('re-applying the 3ef4e97 schema-billing after the release breaks reservatio
       p_day_cost_cap=>null, p_burst=>3, p_uncredited_day_cap=>60, p_reserve_usd=>0.05, p_max_calls_per_action=>8,
       p_stale_seconds=>180, p_budget_tier=>'free', p_max_open=>6)`;
     assert.equal(psql([u, '-At', '-c', call]).trim(), 't', 'the old server\'s call works against the release');
-    psql([u, '-q', '-v', 'ON_ERROR_STOP=1', '-f', '-'], oldText('schema-billing.sql'));
+    // Since 2026-11-02 the old file also STOPS partway, at agni_allowance_status
+    // (its result type changed), but everything before that line, the old
+    // agni_reserve included, has already been applied. Still never do it.
+    assert.throws(() => psql([u, '-q', '-v', 'ON_ERROR_STOP=1', '-f', '-'], oldText('schema-billing.sql')),
+                  /cannot change return type/);
     assert.equal(psql([u, '-At', '-c', `select count(*) from pg_proc where proname = 'agni_reserve'`]).trim(), '2');
     assert.throws(() => psql([u, '-At', '-c', call]), /is not unique/);
   } finally {

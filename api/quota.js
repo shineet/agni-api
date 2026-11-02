@@ -8,6 +8,7 @@ import { deviceCheckConfigured, queryBits, setBits } from './_devicecheck.js';
 import { contribMigration } from './_contrib-migration.js';
 import { deleteData } from './_deletion.js';
 import { dishCleanup } from './_dish-cleanup.js';
+import { costCapStops, costCapRestore } from './_cost-cap-restore.js';
 
 /// The account endpoint: allowance, subscription sync and App Store
 /// notifications. One function, because Vercel's Hobby plan counts them and
@@ -29,6 +30,10 @@ import { dishCleanup } from './_dish-cleanup.js';
 ///   POST /api/quota?op=contrib-migrate    one-off admin conversion of stored
 ///                                         install ids to contributor hashes
 ///                                         (BETA_ADMIN_TOKEN; migrations/README.md)
+///   POST /api/quota?op=cost-cap-stops     admin: who the cost safeguard stopped
+///                                         with credits left (BETA_ADMIN_TOKEN)
+///   POST /api/quota?op=cost-cap-restore   admin: restore one of them, bounded
+///                                         (BETA_ADMIN_TOKEN; docs/cost-cap-restore.md)
 ///   POST /api/quota?op=test-dish-cleanup  one-off admin removal of self-test
 ///                                         dishes by exact (key, install id)
 ///                                         pair (BETA_ADMIN_TOKEN;
@@ -52,6 +57,8 @@ export default async function handler(req, res) {
   // The operator, not the app: authority is BETA_ADMIN_TOKEN, checked inside.
   if (req.method === 'POST' && op === 'contrib-migrate') return contribMigration(req, res, body);
   if (req.method === 'POST' && op === 'test-dish-cleanup') return dishCleanup(req, res, body);
+  if (req.method === 'POST' && op === 'cost-cap-stops') return costCapStops(req, res, body);
+  if (req.method === 'POST' && op === 'cost-cap-restore') return costCapRestore(req, res, body);
 
   const auth = await authenticate(req, {
     meterClass: MeterClass.read,

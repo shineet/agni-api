@@ -51,6 +51,8 @@ async function seed() {
       ((${ago(500)})::date, 'estimate', 'attest', 'paid', true, '177'), (current_date, 'estimate', 'attest', 'paid', true, '177');
     insert into agni_store_notifications (notification_uuid, received_at) values ('n-old', ${ago(500)}), ('n-new', ${ago(3)});
     insert into agni_alerts (kind, at) values ('degraded', ${ago(500)}), ('degraded', now());
+    insert into agni_cost_cap_stops (subject_id, period_start, tier) values
+      ('dev:stop-old', ${ago(500)}, 'free'), ('dev:stop-new', ${ago(3)}, 'free');
   `);
 }
 
@@ -61,7 +63,8 @@ test('a dry run counts what would go and deletes nothing', { skip }, async () =>
     agni_usage_events: 1, agni_actions: 1, agni_subject_days: 1, agni_allowance_periods: 2,
     agni_auth_events: 1, agni_alerts: 1, agni_budget_days: 1, agni_store_notifications: 1,
     agni_research_cache: 1, agni_ingredient_evidence: 0, agni_variant_cache: 1,
-    agni_attest_challenges: 0, agni_ip_windows: 0, 'agni_subjects (ended subscriptions)': 2
+    agni_attest_challenges: 0, agni_ip_windows: 0, 'agni_subjects (ended subscriptions)': 2,
+    agni_cost_cap_stops: 1
   });
   assert.equal(await h.sql(`select count(*) from agni_usage_events`), '3');
   assert.equal(await h.sql(`select count(*) from agni_subjects`), '6');

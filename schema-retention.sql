@@ -68,6 +68,13 @@ begin
   end if;
   record := 'agni_allowance_periods'; rows := n; return next;
 
+  -- Early-stop records go with the periods they describe.
+  select count(*) into n from agni_cost_cap_stops where period_start < now() - period_keep - interval '31 days';
+  if not p_dry_run then
+    delete from agni_cost_cap_stops where period_start < now() - period_keep - interval '31 days';
+  end if;
+  record := 'agni_cost_cap_stops'; rows := n; return next;
+
   -- Aggregates with no identifier of anybody.
   select count(*) into n from agni_auth_events where day < (now() - telemetry_keep)::date;
   if not p_dry_run then delete from agni_auth_events where day < (now() - telemetry_keep)::date; end if;
@@ -133,6 +140,7 @@ begin
     update agni_key_links set subscription_subject = null, subscription_linked_at = null
      where subscription_subject in (select subject_id from retention_ended_subs);
     delete from agni_allowance_periods where subject_id in (select subject_id from retention_ended_subs);
+    delete from agni_cost_cap_stops where subject_id in (select subject_id from retention_ended_subs);
     delete from agni_subjects where subject_id in (select subject_id from retention_ended_subs);
   end if;
   record := 'agni_subjects (ended subscriptions)'; rows := n; return next;

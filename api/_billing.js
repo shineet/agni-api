@@ -81,11 +81,13 @@ export const DEFAULT_ALLOWANCES = {
   // The whole 7-day trial.
   trial: { photo: 25,  search: 25,  web: 3,  costCapUSD: 2.00, burst: 25, dayCostCapUSD: null },
   // Each monthly allowance period, monthly and annual plans alike.
-  // PROPOSED 2026-11-01, pending Shine: cost caps sized ABOVE the counts so the
-  // counts are what stops a subscriber (docs/offer-recommendation-2026-11-01.md).
-  // Offer B' (Shine, 2026-10-31): 100/60/5 at $3.00. 100/100/10 cost ~$3.18 for a
-  // typical subscriber, over any cap that leaves the annual plan a margin.
-  pro:   { photo: 100, search: 60,  web: 5,  costCapUSD: 6.00, burst: 25, dayCostCapUSD: null },
+  // APPROVED 2026-11-02 (Shine): cost caps sized ABOVE the counts so the counts
+  // are what normally stops a subscriber (docs/offer-recommendation-2026-11-01.md).
+  // Pro $6.50 rather than the $6.00 first proposed: a month of nothing but
+  // 20-plus-item feasts measured just over $6. Earlier: Offer B' (2026-10-31),
+  // 100/60/5 at $3.00, which a heavy but real month could hit before 100 photos.
+  // When the cap does stop someone with credits left, see agni_cost_cap_stops.
+  pro:   { photo: 100, search: 60,  web: 5,  costCapUSD: 6.50, burst: 25, dayCostCapUSD: null },
   // Testers before launch: no counts, the same daily cost bound as before.
   beta:  { photo: null, search: null, web: null, costCapUSD: null, burst: null, dayCostCapUSD: 1.00 },
   // The shared token: no identity worth an allowance, so a tight daily bound.
@@ -746,6 +748,16 @@ export function allowanceRefusal(refused, { tier, bucket, limit }) {
       return { status: 402, type: 'allowanceExhausted',
                message: `You have reached this period's AI limit. ${fallback}`,
                ...base, bucket: 'cost' };
+    // THE SAFEGUARD STOPPED SOMEONE WHO STILL HAS CREDITS. Not "you have used
+    // your allowance", which would be untrue: it names the safeguard, says it
+    // is recorded, and gives the person the one thing that lets the operator
+    // find them (agni_cost_cap_stops, api/_cost-cap-restore.js).
+    case 'budget_early':
+      return { status: 402, type: 'allowanceExhausted',
+               message: 'AI analysis is paused by a cost safeguard before your allowance ran out. '
+                 + 'This has been recorded. Contact support with your Support ID (Settings > Agni Pro) '
+                 + `to have it reviewed. ${fallback}`,
+               ...base, bucket: 'cost', safeguard: true };
     case 'burst':
       return { status: 429, type: 'usageLimitReached',
                message: `That is today's limit for AI analysis. ${fallback}`, ...base };

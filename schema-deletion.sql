@@ -102,6 +102,13 @@ begin
   category := 'past_allowance_periods'; outcome := 'deleted'; rows := n; reason := null; return next;
   counts := counts || jsonb_build_object('past_allowance_periods', n);
 
+  -- Early-stop records (2026-11-02): who the cost safeguard stopped with
+  -- credits left, kept only so the operator can restore them.
+  delete from agni_cost_cap_stops c where c.subject_id = p_device_subject;
+  get diagnostics n = row_count;
+  category := 'safeguard_stop_records'; outcome := 'deleted'; rows := n; reason := null; return next;
+  counts := counts || jsonb_build_object('safeguard_stop_records', n);
+
   delete from agni_subject_days d where d.subject_id = p_device_subject and d.day < today;
   get diagnostics n = row_count;
   category := 'past_daily_counts'; outcome := 'deleted'; rows := n; reason := null; return next;
@@ -241,6 +248,11 @@ begin
   get diagnostics n = row_count;
   category := 'subscription_past_allowance_periods'; outcome := 'deleted'; rows := n; reason := null; return next;
   counts := counts || jsonb_build_object('subscription_past_allowance_periods', n);
+
+  delete from agni_cost_cap_stops c where c.subject_id = p_subscription_subject;
+  get diagnostics n = row_count;
+  category := 'subscription_safeguard_stop_records'; outcome := 'deleted'; rows := n; reason := null; return next;
+  counts := counts || jsonb_build_object('subscription_safeguard_stop_records', n);
 
   delete from agni_subject_days d where d.subject_id = p_subscription_subject and d.day < today;
   get diagnostics n = row_count;

@@ -146,7 +146,9 @@ export async function allowanceStatus(caller) {
     dailyResetAt: tomorrow.toISOString(),
     // Money is not shown to people. A fraction is, so the app can warn
     // quietly before the aggregate ceiling stops anything.
-    budgetUsedFraction: costCap ? Math.min(1, Math.round((costUsed / costCap) * 100) / 100) : null,
+    budgetUsedFraction: costCap
+      ? Math.min(1, Math.round((costUsed / (costCap + Number(usage.cost_cap_grant_usd || 0))) * 100) / 100)
+      : null,
     // What Pro and the trial include, from the same configuration the server
     // enforces, so the paywall can never promise a number the server does
     // not honour.

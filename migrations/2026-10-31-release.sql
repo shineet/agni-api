@@ -147,6 +147,12 @@ create table if not exists agni_allowance_periods (
 );
 alter table agni_allowance_periods enable row level security;
 alter table agni_allowance_periods add column if not exists carried_from timestamptz;
+-- RESTORED SAFEGUARD HEADROOM (2026-11-02). The cost cap is a safeguard sized
+-- above the advertised counts; when it stops someone who still has credits,
+-- the operator can add headroom to THIS period only (agni_cost_cap_restore).
+-- Never carried into another period, never more than the tier's own cap, and
+-- the counts still apply, so a restore can never make usage unlimited.
+alter table agni_allowance_periods add column if not exists cost_cap_grant_usd numeric(12,6) not null default 0;
 
 -- Per subject per UTC day: the photo burst guard, the cap on calls that use no
 -- credit, and the per-day cost cap for beta and legacy subjects.
@@ -278,6 +284,29 @@ create table if not exists agni_alerts (
   detail  jsonb
 );
 alter table agni_alerts enable row level security;
+
+-- WHO THE COST SAFEGUARD STOPPED WITH CREDITS LEFT, so they can be found and
+-- restored. One row per subject per period. The alert itself stays free of
+-- subjects (alerts go to logs and webhooks); this table is server-only, like
+-- the ledger it sits beside, and is removed with the subject's other records
+-- (schema-deletion.sql) and by retention (schema-retention.sql).
+create table if not exists agni_cost_cap_stops (
+  subject_id      text not null,
+  period_start    timestamptz not null,
+  tier            text not null,
+  first_at        timestamptz not null default now(),
+  last_at         timestamptz not null default now(),
+  stops           integer not null default 1,
+  bucket          text,
+  used            integer,
+  lim             integer,
+  cost_usd        numeric(12,6),
+  cap_usd         numeric(12,6),
+  restored_at     timestamptz,
+  restored_usd    numeric(12,6) not null default 0,
+  primary key (subject_id, period_start)
+);
+alter table agni_cost_cap_stops enable row level security;
 
 -- App Store Server Notifications already processed, so a redelivery is a no-op.
 create table if not exists agni_store_notifications (
@@ -617,6 +646,21 @@ begin
     return;
   end if;
 
+  -- ONE WEB CALL IN FLIGHT PER SUBJECT (2026-11-02). A web search's result
+  -- size is the one cost a reservation cannot bound: the hard ceiling of one
+  -- call is its server-side loop (10 iterations) times the model's context,
+  -- about $2.16 on Haiku 4.5, against a reservation near $0.17. A settled call
+  -- puts its real cost into cost_usd, after which the cap refuses everything,
+  -- so with one web call open at a time a period can pass its cap by at most
+  -- ONE web call's excess over its reservation. That is the bound the
+  -- exposure figures use (docs/offer-recommendation-2026-11-01.md section 3).
+  if p_bucket = 'web' and exists (
+       select 1 from agni_usage_events
+        where subject_id = p_subject and bucket = 'web' and status = 'reserved') then
+    return query select false, 'busy'::text, false, 0, p_limit, p.cost_usd, 2, null::text;
+    return;
+  end if;
+
   need_credit := p_counts and not (have_action and a.credited);
   used_now := case p_bucket when 'photo' then p.photo_used
                             when 'search' then p.search_used
@@ -642,15 +686,27 @@ begin
     return query select false, 'burst'::text, false, used_now, p_limit, p.cost_usd, next_midnight, null::text;
     return;
   end if;
-  if p_cost_cap is not null and p.cost_usd + p_reserve_usd > p_cost_cap then
+  if p_cost_cap is not null and p.cost_usd + p_reserve_usd > p_cost_cap + p.cost_cap_grant_usd then
     -- The cost cap is a safeguard sized above the advertised counts. If it
-    -- stops someone with credits left, the operator hears about it (once a
-    -- day; no subject in the alert) and can restore them.
-    if p_limit is not null and used_now < p_limit and not exists (
-         select 1 from agni_alerts where kind = 'cost_cap_before_counts' and at >= date_trunc('day', now_ts)) then
-      insert into agni_alerts (kind, detail) values ('cost_cap_before_counts',
-        jsonb_build_object('tier', p_tier, 'bucket', p_bucket, 'used', used_now, 'limit', p_limit,
-                           'cost_usd', p.cost_usd, 'cap_usd', p_cost_cap));
+    -- stops someone with credits left, they are recorded (agni_cost_cap_stops)
+    -- so the operator can find and restore them, and the operator is told
+    -- (once a day; no subject in the alert itself).
+    if p_limit is not null and used_now < p_limit then
+      insert into agni_cost_cap_stops (subject_id, period_start, tier, bucket, used, lim, cost_usd, cap_usd)
+      values (p_subject, p_period_start, p_tier, p_bucket, used_now, p_limit, p.cost_usd,
+              p_cost_cap + p.cost_cap_grant_usd)
+      on conflict (subject_id, period_start) do update
+        set last_at = now_ts, stops = agni_cost_cap_stops.stops + 1, bucket = excluded.bucket,
+            used = excluded.used, lim = excluded.lim, cost_usd = excluded.cost_usd, cap_usd = excluded.cap_usd;
+      if not exists (
+           select 1 from agni_alerts where kind = 'cost_cap_before_counts' and at >= date_trunc('day', now_ts)) then
+        insert into agni_alerts (kind, detail) values ('cost_cap_before_counts',
+          jsonb_build_object('tier', p_tier, 'bucket', p_bucket, 'used', used_now, 'limit', p_limit,
+                             'cost_usd', p.cost_usd, 'cap_usd', p_cost_cap + p.cost_cap_grant_usd,
+                             'find', 'POST /api/quota?op=cost-cap-stops'));
+      end if;
+      return query select false, 'budget_early'::text, false, used_now, p_limit, p.cost_usd, until_end, null::text;
+      return;
     end if;
     return query select false, 'budget'::text, false, used_now, p_limit, p.cost_usd, until_end, null::text;
     return;
@@ -819,11 +875,15 @@ $$;
 -- A period not started yet shows what it WILL carry (agni__carry_source), so
 -- the app never shows a fresh allowance that the first call would not honour.
 drop function if exists agni_allowance_status(text, timestamptz);
+-- Dropped first: 2026-11-02 added cost_cap_grant_usd to its result, and a
+-- function's result type cannot change in place.
+drop function if exists agni_allowance_status(text, timestamptz, text);
 create or replace function agni_allowance_status(p_subject text, p_period_start timestamptz,
                                                  p_tier text default null)
 returns table (photo_used integer, search_used integer, web_used integer,
                cost_usd numeric, photos_today integer,
-               free_photo_exhausted boolean, free_search_exhausted boolean)
+               free_photo_exhausted boolean, free_search_exhausted boolean,
+               cost_cap_grant_usd numeric)
 language sql
 security definer
 as $$
@@ -832,11 +892,85 @@ as $$
          coalesce((select photo_count from agni_subject_days
                     where subject_id = p_subject and day = (now() at time zone 'utc')::date), 0),
          coalesce((select s.free_photo_exhausted from agni_subjects s where s.subject_id = p_subject), false),
-         coalesce((select s.free_search_exhausted from agni_subjects s where s.subject_id = p_subject), false)
+         coalesce((select s.free_search_exhausted from agni_subjects s where s.subject_id = p_subject), false),
+         -- A carried period starts with no grant: a restore belongs to one period.
+         coalesce(p.cost_cap_grant_usd, 0)
     from (select 1) one
     left join agni_allowance_periods p
       on p.subject_id = p_subject and p.period_start = p_period_start
     left join agni__carry_source(p_subject, p_period_start, p_tier) c on p.subject_id is null;
+$$;
+
+-- RESTORE AFTER AN EARLY STOP (operator only; api/_cost-cap-restore.js).
+--
+-- Adds safeguard headroom to ONE period of ONE subject, and only where the
+-- safeguard is recorded as having stopped that subject with credits left in
+-- that period. The total added to a period never exceeds p_max_grant_usd (the
+-- tier's own cap: at most double). Purchases, counts, burst and every other
+-- limit are untouched, so the advertised counts remain the ceiling.
+create or replace function agni_cost_cap_restore(p_subject text, p_period_start timestamptz,
+                                                 p_grant_usd numeric, p_max_grant_usd numeric)
+returns table (ok boolean, reason text, granted numeric, total_grant numeric)
+language plpgsql
+security definer
+as $$
+declare
+  st  agni_cost_cap_stops%rowtype;
+  cur numeric;
+  add numeric;
+begin
+  if p_grant_usd is null or p_grant_usd <= 0 or p_max_grant_usd is null or p_max_grant_usd <= 0 then
+    return query select false, 'invalid_amount'::text, 0::numeric, 0::numeric;
+    return;
+  end if;
+  select * into st from agni_cost_cap_stops
+   where subject_id = p_subject and period_start = p_period_start for update;
+  if not found then
+    return query select false, 'no_early_stop'::text, 0::numeric, 0::numeric;
+    return;
+  end if;
+  select cost_cap_grant_usd into cur from agni_allowance_periods
+   where subject_id = p_subject and period_start = p_period_start for update;
+  if not found then
+    return query select false, 'no_period'::text, 0::numeric, 0::numeric;
+    return;
+  end if;
+  add := least(p_grant_usd, p_max_grant_usd - cur);
+  if add <= 0 then
+    return query select false, 'grant_limit'::text, 0::numeric, cur;
+    return;
+  end if;
+  update agni_allowance_periods set cost_cap_grant_usd = cost_cap_grant_usd + add, updated_at = now()
+   where subject_id = p_subject and period_start = p_period_start;
+  update agni_cost_cap_stops set restored_at = now(), restored_usd = restored_usd + add
+   where subject_id = p_subject and period_start = p_period_start;
+  insert into agni_alerts (kind, detail) values ('cost_cap_restored',
+    jsonb_build_object('tier', st.tier, 'granted_usd', add, 'total_grant_usd', cur + add));
+  return query select true, 'ok'::text, add, cur + add;
+end;
+$$;
+
+-- The early stops the operator can act on: each with the devices linked to
+-- it (their Support IDs are computed in Node, never stored) and whether its
+-- period is still running. Operator only, through api/_cost-cap-restore.js.
+create or replace function agni_cost_cap_stops_list(p_since timestamptz)
+returns table (subject_id text, period_start timestamptz, period_end timestamptz, tier text,
+               first_at timestamptz, last_at timestamptz, stops integer, bucket text,
+               used integer, lim integer, cost_usd numeric, cap_usd numeric,
+               restored_usd numeric, grant_usd numeric, device_subjects text[])
+language sql
+security definer
+as $$
+  select c.subject_id, c.period_start, p.period_end, c.tier, c.first_at, c.last_at, c.stops, c.bucket,
+         c.used, c.lim, c.cost_usd, c.cap_usd, c.restored_usd, coalesce(p.cost_cap_grant_usd, 0),
+         case when c.subject_id like 'dev:%' then array[c.subject_id]
+              else coalesce((select array_agg(k.device_subject order by k.device_subject)
+                               from agni_key_links k where k.subscription_subject = c.subject_id), '{}') end
+    from agni_cost_cap_stops c
+    left join agni_allowance_periods p on p.subject_id = c.subject_id and p.period_start = c.period_start
+   where c.last_at >= p_since
+   order by c.last_at desc
+   limit 500;
 $$;
 
 -- Writes a verified subscription transaction.
@@ -1150,7 +1284,8 @@ begin
                          'agni_subscription_upsert', 'agni_link_key', 'agni_key_context',
                          'agni_mark_device', 'agni_store_notification_known',
                          'agni_store_notification_seen', 'agni_ip_window',
-                         'agni_research_cache_get', 'agni_research_cache_put', 'agni_caller')
+                         'agni_research_cache_get', 'agni_research_cache_put', 'agni_caller',
+                         'agni_cost_cap_restore', 'agni_cost_cap_stops_list')
   loop
     execute format('revoke execute on function %s from public', f.sig);
     if exists (select 1 from pg_roles where rolname = 'anon') then
@@ -1535,6 +1670,13 @@ begin
   category := 'past_allowance_periods'; outcome := 'deleted'; rows := n; reason := null; return next;
   counts := counts || jsonb_build_object('past_allowance_periods', n);
 
+  -- Early-stop records (2026-11-02): who the cost safeguard stopped with
+  -- credits left, kept only so the operator can restore them.
+  delete from agni_cost_cap_stops c where c.subject_id = p_device_subject;
+  get diagnostics n = row_count;
+  category := 'safeguard_stop_records'; outcome := 'deleted'; rows := n; reason := null; return next;
+  counts := counts || jsonb_build_object('safeguard_stop_records', n);
+
   delete from agni_subject_days d where d.subject_id = p_device_subject and d.day < today;
   get diagnostics n = row_count;
   category := 'past_daily_counts'; outcome := 'deleted'; rows := n; reason := null; return next;
@@ -1675,6 +1817,11 @@ begin
   category := 'subscription_past_allowance_periods'; outcome := 'deleted'; rows := n; reason := null; return next;
   counts := counts || jsonb_build_object('subscription_past_allowance_periods', n);
 
+  delete from agni_cost_cap_stops c where c.subject_id = p_subscription_subject;
+  get diagnostics n = row_count;
+  category := 'subscription_safeguard_stop_records'; outcome := 'deleted'; rows := n; reason := null; return next;
+  counts := counts || jsonb_build_object('subscription_safeguard_stop_records', n);
+
   delete from agni_subject_days d where d.subject_id = p_subscription_subject and d.day < today;
   get diagnostics n = row_count;
   category := 'subscription_past_daily_counts'; outcome := 'deleted'; rows := n; reason := null; return next;
@@ -1793,6 +1940,13 @@ begin
   end if;
   record := 'agni_allowance_periods'; rows := n; return next;
 
+  -- Early-stop records go with the periods they describe.
+  select count(*) into n from agni_cost_cap_stops where period_start < now() - period_keep - interval '31 days';
+  if not p_dry_run then
+    delete from agni_cost_cap_stops where period_start < now() - period_keep - interval '31 days';
+  end if;
+  record := 'agni_cost_cap_stops'; rows := n; return next;
+
   -- Aggregates with no identifier of anybody.
   select count(*) into n from agni_auth_events where day < (now() - telemetry_keep)::date;
   if not p_dry_run then delete from agni_auth_events where day < (now() - telemetry_keep)::date; end if;
@@ -1858,6 +2012,7 @@ begin
     update agni_key_links set subscription_subject = null, subscription_linked_at = null
      where subscription_subject in (select subject_id from retention_ended_subs);
     delete from agni_allowance_periods where subject_id in (select subject_id from retention_ended_subs);
+    delete from agni_cost_cap_stops where subject_id in (select subject_id from retention_ended_subs);
     delete from agni_subjects where subject_id in (select subject_id from retention_ended_subs);
   end if;
   record := 'agni_subjects (ended subscriptions)'; rows := n; return next;

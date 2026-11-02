@@ -291,7 +291,7 @@ test('the provisional allowances are what was specified', () => {
   assert.deepEqual(
     { photo: DEFAULT_ALLOWANCES.pro.photo, search: DEFAULT_ALLOWANCES.pro.search,
       web: DEFAULT_ALLOWANCES.pro.web, burst: DEFAULT_ALLOWANCES.pro.burst, cost: DEFAULT_ALLOWANCES.pro.costCapUSD },
-    { photo: 100, search: 60, web: 5, burst: 25, cost: 6.0 });
+    { photo: 100, search: 60, web: 5, burst: 25, cost: 6.5 });
   assert.equal(DEFAULT_ALLOWANCES.free.costCapUSD, 0.75);
 });
 
