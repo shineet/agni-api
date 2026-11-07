@@ -77,11 +77,12 @@ footer a{color:var(--ink3)}
   <p><b style="color:var(--ink)">The short version.</b></p>
   <ul style="margin-bottom:0">
     <li>Your food diary (every meal, weight, workout and everything Agni reads from Apple Health) is stored on your iPhone, and <strong>the diary as a whole is never uploaded</strong>.</li>
-    <li>Three kinds of thing do leave your phone, and only when you use the feature that needs them:
+    <li>Four kinds of thing do leave your phone, and only when you use the feature that needs them:
       <ul style="margin:9px 0 0">
         <li>a photo or food name you ask the AI to analyse;</li>
         <li>a dish you create, which can be added to the shared dish table;</li>
-        <li>the name of a dish Agni could not find.</li>
+        <li>the name of a dish Agni could not find;</li>
+        <li>a barcode you scan, which is looked up in Open Food Facts.</li>
       </ul>
     </li>
     <li>AI analysis needs your permission first.</li>
@@ -143,17 +144,23 @@ footer a{color:var(--ink3)}
     <td><b>A dish name and its per-serving nutrition</b></td>
     <td>When you save a meal with a dish Agni's table does not have</td>
     <td>Agni's server</td>
-    <td>Kept so the shared dish table improves; it records what one serving of a dish is worth, not what or when you ate. It is stored with a contributor code calculated from your install identifier, so one phone counts once towards publishing a dish. I can recalculate that code from an install identifier, so it is pseudonymous and linkable to your other records by me, not anonymous.</td>
+    <td>Kept so the shared dish table improves; it records what one serving of a dish is worth, not your meal or how much you ate, though like every database entry it carries the date it was added or last changed. It is stored with a contributor code calculated from your install identifier, so one phone counts once towards publishing a dish. I can recalculate that code from an install identifier, so it is pseudonymous and linkable to your other records by me, not anonymous.</td>
   </tr>
   <tr>
     <td><b>The name of a dish Agni could not find</b></td>
     <td>When a lookup misses</td>
     <td>Agni's server</td>
-    <td>Counted, so I know which foods to add next, with the same contributor code.</td>
+    <td>Counted, so I know which foods to add next, with the same contributor code and the dates it was first and last missed. It can be a name you searched or typed, a dish seen in a photo that the table does not have, or the number of a barcode Open Food Facts did not know.</td>
+  </tr>
+  <tr>
+    <td><b>A barcode</b></td>
+    <td>When you scan a packet</td>
+    <td>Open Food Facts, directly from your phone</td>
+    <td>Agni looks the barcode up in the Open Food Facts database. Open Food Facts receives the barcode and, as with any website, your IP address. Agni's server is not involved. Open Food Facts' own privacy policy covers what it keeps.</td>
   </tr>
   <tr>
     <td><b>An install identifier</b></td>
-    <td>With every request to Agni's server</td>
+    <td>With most requests to Agni's server</td>
     <td>Agni's server</td>
     <td>A random value created on your phone, kept in the iPhone Keychain. It persists across app updates and usually across reinstalling. It is not your Apple ID, phone number or advertising identifier. It is the key to your Free sample and usage records, so it is pseudonymous: it does not name you, but every record attached to it is about the same copy of Agni.</td>
   </tr>
@@ -161,7 +168,7 @@ footer a{color:var(--ink3)}
     <td><b>An App Attest proof</b></td>
     <td>With every request to Agni's server</td>
     <td>Agni's server, checked with Apple's App Attest service</td>
-    <td>Proves the request came from a genuine copy of Agni on a real Apple device. The server keeps the key's identifier, its public key and counters. That key is tied to your install and stays the same until the app is reinstalled or the key is replaced, so it is another persistent pseudonymous identifier.</td>
+    <td>Proves the request came from a genuine copy of Agni on a real Apple device. The server keeps the key's identifier, its public key and counters. That key is tied to your install and stays the same until the app is reinstalled or the key is replaced, so it is another persistent pseudonymous identifier. Agni also uses Apple's DeviceCheck: your phone gives the server a one-time token, and the server asks Apple to read and set two bits that Apple keeps for this device, which survive reinstalling. They are used only to stop the Free sample being claimed again; the token itself is not stored.</td>
   </tr>
   <tr>
     <td><b>Your subscription status</b></td>
@@ -173,7 +180,7 @@ footer a{color:var(--ink3)}
     <td><b>Usage records</b></td>
     <td>Each time you use an AI feature</td>
     <td>Agni's server</td>
-    <td>Which feature, when, which AI model, how many tokens it used, what it cost and whether it worked. They are linked to your install identifier, or to your subscription's transaction identifier when you subscribe. Never the photo, the food name or the meal. They make allowances and limits work. If the cost safeguard pauses your AI use before your allowance is used, the server also records that (which period, how far through your allowance you were, and what it had cost) so I can find it when you write in.</td>
+    <td>Which feature, when, which AI model, how many tokens it used, what it cost, whether it worked (the result and status code), and Anthropic's identifier for that request, so a problem can be matched to Anthropic's records. They are linked to your install identifier, or to your subscription's transaction identifier when you subscribe. Never the photo, the food name or the meal. They make allowances and limits work. If the cost safeguard pauses your AI use before your allowance is used, the server also records that (which period, how far through your allowance you were, and what it had cost) so I can find it when you write in.</td>
   </tr>
   <tr>
     <td><b>Your IP address</b></td>
@@ -189,11 +196,12 @@ footer a{color:var(--ink3)}
 <h2>The companies involved</h2>
 <p>I do not sell your information. I share it only with the service providers below, only to run the features you use, and <strong>none of them receives your Apple Health data or your diary</strong>.</p>
 <ul>
-  <li><strong>Anthropic</strong> analyses photos and answers food questions. Requests reach Anthropic from Agni's server with no identifier of yours attached. Anthropic's commercial terms say it &ldquo;may not train models on Customer Content&rdquo;. Agni uses Anthropic's Claude Sonnet and Claude Haiku models.</li>
+  <li><strong>Anthropic</strong> analyses photos and answers food questions. Requests reach Anthropic from Agni's server with no identifier of yours attached. Agni's server keeps Anthropic's identifier for each request in its usage record. Anthropic's commercial terms say it &ldquo;may not train models on Customer Content&rdquo;. Agni uses Anthropic's Claude Sonnet and Claude Haiku models.</li>
   <li><strong>Vercel</strong> runs Agni's server in its US East (Washington, D.C.) region.</li>
   <li><strong>Supabase</strong> holds Agni's database in its US East (North Virginia) region: the dish table, the caches, usage records, subscription status and, if you asked for a beta invitation, your email address.</li>
   <li><strong>USDA FoodData Central</strong> answers some food lookups. It receives a food name from Agni's server and nothing else.</li>
-  <li><strong>Apple</strong> processes your subscription payment, checks App Attest proofs, and sends the server subscription notices. Apple's own privacy policy covers what Apple does.</li>
+  <li><strong>Open Food Facts</strong> answers barcode lookups. Your phone sends it the barcode directly, with your IP address as any website receives it.</li>
+  <li><strong>Apple</strong> processes your subscription payment, checks App Attest proofs, keeps the two DeviceCheck bits, and sends the server subscription notices. If you dictate a meal, your iPhone transcribes it on the device where it can, otherwise Apple's speech service does; Agni's server never receives the audio. Apple's own privacy policy covers what Apple does.</li>
 </ul>
 
 <h2>How long things are kept</h2>
@@ -206,7 +214,7 @@ footer a{color:var(--ink3)}
   <tr><td><b>Shared dish table entries and missed-dish counts</b></td><td>Kept while the dish table is in use</td></tr>
   <tr><td><b>Free-sample markers, install records and App Attest keys</b></td><td>Kept to stop the Free sample being claimed again from the same phone. There is no fixed deletion date for these yet, and a request to delete your server data does not remove them, for the same reason.</td></tr>
   <tr><td><b>Hashed IP address</b></td><td>Normally removed soon after it is a day old</td></tr>
-  <tr><td><b>Vercel request logs</b> (IP address, time, path; not request contents)</td><td>Up to 30 days. No server or database logs are forwarded to any other service.</td></tr>
+  <tr><td><b>Vercel request logs</b> (IP address, time and the web address requested; for food searches that address includes the search text, and for allowance checks the install identifier. Never photos or the body of a request)</td><td>Up to 30 days. No server or database logs are forwarded to any other service.</td></tr>
   <tr><td><b>Database backups</b></td><td>Deleted records stay in Agni's daily database backups until those backups expire, up to 7 days later.</td></tr>
   <tr><td><b>Beta invitation email and name</b></td><td>Kept until you ask me to delete it.</td></tr>
 </table>
