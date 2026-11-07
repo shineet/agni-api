@@ -61,7 +61,7 @@ footer a{color:var(--ink3)}
 
 <header>
   <div class="brand"><svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0894A" d="M12 1.6c.5 3.4-1.3 4.7-2.7 6.2C7.7 9.5 6.4 11 6.4 13.6a5.6 5.6 0 0 0 11.2 0c0-2-.8-3.3-1.8-4.6-.4 1-1 1.7-1.8 2.1.5-2.3-.1-4.6-2-9.5Z"/></svg><b>Agni</b><span>Better Choices<br>A Brighter You</span></div>
-  <p class="mono" style="margin:0 0 16px">Terms of Use &middot; Last updated 1 October 2026</p>
+  <p class="mono" style="margin:0 0 16px">Terms of Use &middot; Last updated 7 November 2026</p>
   <h1>What Agni is, what it is not, and what you can expect from it.</h1>
   <p class="lede">Plain terms for an app made by one person. By using Agni you agree to these. If you do not, please delete the app.</p>
 </header>
@@ -74,50 +74,80 @@ footer a{color:var(--ink3)}
 </div>
 
 <h2>What Agni does</h2>
-<p>Agni records what you eat, reads what Apple Health knows about your movement and sleep, and shows the two together with a daily food budget and some plain-language guidance. It works out food figures from photographs, from a bundled table of dishes, from public nutrition databases and from an AI model.</p>
+<p>Agni records what you eat, reads what Apple Health knows about your movement, sleep and recovery, and reads them together: a daily food budget, a movement goal, and plain-language guidance about what matters now. It works out food figures from photographs, from a bundled table of dishes, from public nutrition databases and, when you allow it, from an AI model.</p>
 
 <h2>The figures are estimates</h2>
 <p>This is the most important thing to understand about the app, and Agni says so on the screen as well as here.</p>
 <ul>
-  <li><strong>A photograph cannot measure.</strong> It cannot see the oil in a curry, how much ghee went on a roti, or what is underneath what. Agni makes an informed guess from what is visible and tells you when it is unsure.</li>
-  <li><strong>The dish table is a reference, not your kitchen.</strong> Your mother's sambar is not the average sambar.</li>
-  <li><strong>Apple Health figures are only as good as what recorded them.</strong> A phone in a bag counts no steps. A watch on a charger measures no heart rate.</li>
-  <li><strong>The budget is arithmetic on top of estimates.</strong> It inherits every uncertainty underneath it.</li>
+  <li><strong>A photograph cannot measure.</strong> It cannot see the oil in a curry, how much ghee went on a roti, or what is underneath what. Agni makes an informed estimate from what is visible and tells you when it is unsure. You can review and adjust estimates.</li>
+  <li><strong>The dish table is a reference, not your kitchen.</strong></li>
+  <li><strong>Apple Health figures are only as good as what recorded them.</strong></li>
+  <li><strong>The budget and the guidance are built on top of estimates</strong> and inherit every uncertainty underneath them.</li>
 </ul>
-<p>Agni is designed to be useful for noticing patterns over weeks. It is not designed to be exact on any single plate, and treating one day's number as a fact is a misuse of it.</p>
+<p>Agni is designed to be useful for noticing patterns over weeks. It is not designed to be exact on any single plate.</p>
 
 <h2>Your health is your responsibility</h2>
-<p>You decide what to eat and how to train. Agni is a tool for seeing your own behaviour more clearly, and nothing it shows is an instruction. If something it tells you contradicts your doctor, your doctor is right.</p>
-<p>If any weight goal you set in Agni would be unhealthy for you, the app applies safety floors, but <strong>those floors are general and know nothing about you specifically</strong>. They are not a substitute for professional advice.</p>
+<p>You decide what to eat and how to train. Nothing Agni shows is an instruction. If something it tells you contradicts your doctor, your doctor is right. Where you set a weight goal, the app applies general safety floors, but <strong>those floors know nothing about you specifically</strong> and are not a substitute for professional advice.</p>
 
-<h2>What it costs</h2>
-<p>Agni is free while in beta. Photo estimates cost real money to run, so each copy of the app gets a number of free estimates, after which you can add your own Anthropic API key in Settings to continue. Everything else in Agni, including logging by hand, the dish table, Health, movement and the whole history, keeps working regardless.</p>
-<p>If pricing changes in future, you will be told before it affects you, and no charge will ever appear without you agreeing to it first.</p>
+<h2>Agni Free and Agni Pro</h2>
+<p><strong>Agni Free</strong> includes manual logging, quick add, food search, barcode scanning, calories and macros, water, Apple Health, weight and goals, history, workout records and the Apple Watch basics. Free also includes a one-time sample of AI photo analyses and AI food searches for each copy of the app.</p>
+<p><strong>Agni Pro</strong> adds &ldquo;For you now&rdquo;, recovery and movement assessments, workout notes, and AI analysis of meal photos, nutrition labels and food searches, within the allowances below.</p>
+<p>In Agni 1.0 (build 180) and later, AI analysis only runs after you allow it in the app. Switching it off in Settings &gt; Agni Pro makes Agni ask again before each AI use.</p>
 
-<h2>Using your own API key</h2>
-<p>If you add your own key, your account with that provider is between you and them, their charges are yours to pay, and their terms apply to your use of it. Agni sends your requests directly from your phone and never sees your key.</p>
+<h2>Subscriptions</h2>
+<ul>
+  <li>Agni Pro is sold as a monthly or an annual auto-renewing subscription through Apple. The current price for your country is shown in the app and on the App Store before you buy.</li>
+  <li>New subscribers may be eligible for a 7-day free trial. Apple decides eligibility, and an introductory trial is generally available once per Apple Account for Agni Pro.</li>
+  <li>Payment is charged to your Apple Account when you confirm the purchase, or when an eligible free trial ends.</li>
+  <li>Your subscription renews automatically at the end of each period, at the then-current price, unless you cancel at least 24 hours before the period ends. If the price goes up, Apple will tell you and, where the law or Apple requires it, ask you to agree first.</li>
+  <li><strong>Cancelling.</strong> Cancel or manage your subscription in Settings &gt; your name &gt; Subscriptions. After cancelling a paid period, you keep Pro until that period ends. To avoid being charged when a free trial ends, cancel at least 24 hours before the trial ends.</li>
+  <li><strong>Switching plans.</strong> Apple handles switches between monthly and annual. A switch between the two normally takes effect at your next renewal date.</li>
+  <li><strong>Refunds.</strong> Apple handles all payments and refunds. I do not see or store your payment details. Refund requests go to Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</li>
+  <li>Deleting the app does not cancel your subscription. Cancel it in Settings.</li>
+</ul>
 
-<h2>Fair use</h2>
-<p>Please do not try to break the service, get around its limits, take it apart to extract the keys inside it, use it to build a competing product, or send it anything unlawful. The shared service has rate limits and spending caps, and access can be withdrawn from a copy of the app that abuses them.</p>
+<h2>AI allowances and limits</h2>
+<p>AI analysis costs real money each time it runs, so Pro comes with allowances, not unlimited use.</p>
+<p><strong>The allowances.</strong> Each month Pro includes:</p>
+<ul>
+  <li>100 photo or nutrition-label analyses, up to 25 a day</li>
+  <li>60 AI food searches, dish descriptions and ingredient breakdowns</li>
+  <li>5 ingredient web lookups</li>
+</ul>
+<p><strong>What counts as one.</strong> One photo analysis is one photo or nutrition label you send for an estimate. It includes everything Agni does to answer it: splitting a busy plate into parts, identifying a drink, and automatic retries. Sending it again with a correction counts as a new analysis. One AI search is one search (including the refinements you type while shaping it), one dish description, or one ingredient breakdown. One web lookup is one ingredient Agni looks up on the web because no saved answer exists; a saved answer does not count.</p>
+<p>During a free trial the allowance is 25 analyses, 25 searches and 3 ingredient lookups for the trial period. Allowances reset every month on your subscription date, on the annual plan too. Unused allowance does not carry over. Settings &gt; Agni Pro shows what is left and when it resets.</p>
+<p><strong>AI access can stop before you reach those numbers.</strong> The numbers are what Pro includes in a period, not a promise that every one will always be available. There are four separate reasons it can stop early:</p>
+<p><strong>1. Daily photo limit.</strong> At most 25 photo or label analyses in one day. The day is counted in Coordinated Universal Time (UTC), so more become available at midnight UTC.</p>
+<p><strong>2. A cost safeguard.</strong> Each period also has a limit on what your AI use costs to run. Analyses do not all cost the same: a plate with many dishes, a long answer, or a lookup that searches the web costs more than a simple one. The safeguard is set above what typical use of the allowances costs, but unusually heavy use can reach it before the counts are used. If it stops AI analysis while you still have allowance left, the app tells you and the stop is recorded. Write to me and I will review it; in Agni 1.0 (build 180) and later, include the Support ID shown in Settings &gt; Agni Pro.</p>
+<p><strong>3. Agni's emergency spending maximum.</strong> Agni sets a ceiling on what the whole service spends on AI each day. As spending approaches a lower daily level, AI analysis pauses until the next day for Free users and then for trials. Subscribers are paused only if the whole service reaches its emergency daily maximum.</p>
+<p><strong>4. Outages and overload.</strong> If the AI provider is down or overloaded, or requests arrive very fast, AI analysis may be slowed or unavailable for a while. This is about the service, not anything you used up.</p>
+<p>Whenever AI analysis is unavailable, everything else in Agni keeps working: logging by hand, quick add, food search, barcode scanning, your budget, Apple Health, your history and the Watch app.</p>
+<p>If you think a limit has stopped you unfairly, or AI access has been unavailable for a long stretch, write to me.</p>
+
+<h2>Fair use of the service</h2>
+<p>Please do not try to break the service, get around its limits, take the app apart to extract anything inside it, use it to build a competing product, or send it anything unlawful. Access to the shared service can be withdrawn from a copy of the app that abuses it.</p>
 
 <h2>What belongs to whom</h2>
 <p><strong>Your data is yours.</strong> Your meals, your figures and your history belong to you and live on your phone.</p>
-<p>When Agni learns a dish name and what one serving of it is worth, that fact may be added to the shared dish table so the app gets better for everyone. That is a fact about a dish, not about you, and it carries nothing identifying. The app itself, its design, its dish table and its name remain mine.</p>
+<p>When you create a dish that Agni's table does not have, its name and what one serving is worth may be added to the shared dish table so the app gets better for everyone. That is a fact about a dish, not a record of your eating. The app itself, its design, its dish table and its name remain mine.</p>
 
 <h2>Availability</h2>
-<p>Agni is made and run by one person. The service can be interrupted, limits can be reached, and features can change or be removed. I will not pretend otherwise by promising uptime I cannot guarantee. Your logged meals live on your phone and are unaffected by any outage.</p>
+<p>Agni is made and run by one person. The service can be interrupted, limits can be reached, and features can change. I will not promise uptime I cannot guarantee. Your logged meals live on your phone and are unaffected by an outage.</p>
 
 <h2>Keep your own backups</h2>
-<p>Because your data is on your device, it is covered by your iPhone backup. If you do not back your phone up and you lose it, the data goes with it. I have no copy to restore for you, which is the direct consequence of not uploading it in the first place.</p>
+<p>Your diary is on your device, so it is covered by your iPhone backup. If you do not back up your phone and you lose it, the diary goes with it. I hold no copy of it to restore.</p>
 
 <h2>Limits of liability</h2>
-<p>Agni is provided as it is, without warranty of any kind. To the fullest extent the law allows, I am not liable for any loss arising from your use of it, including decisions you make about food, exercise or health based on what it shows you. Some places do not allow these limits to be excluded, and where that is so, these terms do not take away rights you have by law.</p>
+<p>Agni is provided as it is, without warranty of any kind. To the fullest extent the law allows, I am not liable for any loss arising from your use of it, including decisions you make about food, exercise or health based on what it shows you. Some places do not allow these limits, and where that is so, these terms do not take away rights you have by law.</p>
+
+<h2>Apple</h2>
+<p>These terms are between you and me, not Apple. Apple is not responsible for Agni or its content, and has no obligation to provide maintenance or support for it. If Agni fails to conform to any applicable warranty, you may notify Apple and Apple will refund the purchase price, if any; to the maximum extent the law allows, Apple has no other warranty obligation. Apple is not responsible for any claims relating to Agni, including product liability, failure to meet a legal or regulatory requirement, consumer protection claims, or claims that Agni infringes someone else's intellectual property; those are mine to handle. You confirm you are not in a country under a US embargo and are not on a US list of prohibited or restricted parties. Apple and its subsidiaries are third-party beneficiaries of these terms and may enforce them against you. Apple's Licensed Application End User License Agreement also applies to your use of Agni; where it and these terms differ, these terms apply as far as Apple allows.</p>
 
 <h2>Children</h2>
 <p>Agni is not intended for children under 13.</p>
 
 <h2>Ending it</h2>
-<p>You can stop using Agni at any time by deleting it, which removes everything it holds. I may withdraw access to the shared service from a copy of the app that abuses it.</p>
+<p>You can stop using Agni at any time by deleting it. That removes what it holds on your phone, but not meals it wrote to Apple Health, your phone's backups, or records on Agni's server (see the <a href="https://agnilog.app/privacy">Privacy Policy</a>), and it does not cancel a subscription. I may withdraw access to the shared service from a copy of the app that abuses it.</p>
 
 <h2>Changes</h2>
 <p>If these terms change in a way that matters, the date at the top changes and the app will say so.</p>

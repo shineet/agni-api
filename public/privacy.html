@@ -66,110 +66,181 @@ footer a{color:var(--ink3)}
 
 <header>
   <div class="brand"><svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0894A" d="M12 1.6c.5 3.4-1.3 4.7-2.7 6.2C7.7 9.5 6.4 11 6.4 13.6a5.6 5.6 0 0 0 11.2 0c0-2-.8-3.3-1.8-4.6-.4 1-1 1.7-1.8 2.1.5-2.3-.1-4.6-2-9.5Z"/></svg><b>Agni</b><span>Better Choices<br>A Brighter You</span></div>
-  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; Last updated 1 October 2026</p>
-  <h1>Your food and your health data stay on your phone.</h1>
-  <p class="lede">Agni has <strong>no accounts and no sign-in</strong>. It does not know your name. This page describes exactly what the app does with information, what leaves your device and what does not.</p>
+  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; Last updated 7 November 2026</p>
+  <h1>Your food diary and your health data stay on your phone.</h1>
+  <p class="lede">Agni has <strong>no accounts and no sign-in</strong>, and it does not ask for your name. This page sets out what the app keeps on your phone, what it sends away and why, who receives it, and how long it is kept.</p>
 </header>
 
 <div class="level"><i></i><u></u></div>
 
 <div class="card key">
-  <p><b style="color:var(--ink)">The short version.</b> Your meals, your weight, your workouts and everything Agni reads from Apple Health are stored on your iPhone and are never uploaded. When you photograph a meal, that single photograph is sent to be analysed and is <strong>discarded as soon as the answer comes back</strong>. It is never stored on a server. There are no accounts, no advertising, no analytics trackers and nothing is ever sold.</p>
+  <p><b style="color:var(--ink)">The short version.</b></p>
+  <ul style="margin-bottom:0">
+    <li>Your food diary (every meal, weight, workout and everything Agni reads from Apple Health) is stored on your iPhone, and <strong>the diary as a whole is never uploaded</strong>.</li>
+    <li>Three kinds of thing do leave your phone, and only when you use the feature that needs them:
+      <ul style="margin:9px 0 0">
+        <li>a photo or food name you ask the AI to analyse;</li>
+        <li>a dish you create, which can be added to the shared dish table;</li>
+        <li>the name of a dish Agni could not find.</li>
+      </ul>
+    </li>
+    <li>AI analysis needs your permission first.</li>
+    <li>Agni's server keeps usage counts and your subscription status so allowances work. Those records use identifiers that do not name you but do stay the same over time. I can link them to each other; I cannot link them to your name unless you tell me who you are.</li>
+    <li>There is no advertising, no tracking across other companies' apps or websites, and <strong>nothing is sold</strong>.</li>
+  </ul>
 </div>
 
 <h2>Who this is</h2>
 <p>Agni is made by Shine Thankappan, an independent developer. There is no company behind it and no team. If you write to me, I read it myself.</p>
 
-<h2>What stays on your iPhone, always</h2>
-<p>All of the following is held in Agni's own storage on your device. None of it is uploaded to me, and I have no way to see it:</p>
+<h2>What stays on your iPhone</h2>
+<p>Agni's own storage on your device holds your complete diary:</p>
 <ul>
-  <li>Every meal you log, its dishes, calories, macros and the small photo thumbnail Agni keeps so you can recognise your own meals in your history</li>
-  <li>Everything Agni reads from <strong>Apple Health</strong>: steps, energy burned, heart rate, heart rate variability, sleep and workouts</li>
-  <li>Your body details, weight, goals and targets</li>
-  <li>Your settings, including your personal Anthropic API key if you choose to add one, which is held in the iPhone Keychain</li>
-  <li>Everything the coach says to you, which is worked out on your phone and never sent anywhere</li>
+  <li>every meal you log, with its dishes, calories and macros, and the small photo thumbnail Agni keeps so you can recognise your meals;</li>
+  <li>everything Agni reads from <strong>Apple Health</strong> (steps, energy burned, heart rate, heart rate variability, sleep and workouts);</li>
+  <li>your body details, weight, goals and targets;</li>
+  <li>your settings;</li>
+  <li>everything Agni tells you, including &ldquo;For you now&rdquo;, recovery and movement assessments and workout notes. These are worked out on your phone.</li>
 </ul>
-<p>If you delete Agni, all of it goes with the app.</p>
+<p>None of this is uploaded as a diary. The specific pieces listed under &ldquo;What leaves your device&rdquo; are the only exceptions, and only when you use those features.</p>
+<p><strong>When you delete Agni.</strong> Deleting the app removes what Agni stores on your phone, with three exceptions:</p>
+<ul>
+  <li>Meals Agni wrote to Apple Health stay in Health until you delete them there.</li>
+  <li>Your iPhone and iCloud backups may still contain Agni's data until those backups are replaced.</li>
+  <li>Records on Agni's server are not deleted by deleting the app. Agni's install identifier is kept in the iPhone Keychain, which normally survives deleting and reinstalling the app, so reinstalling usually reconnects you to the same server records.</li>
+</ul>
 
 <h2>Apple Health</h2>
-<p>Agni asks permission before reading anything, and you choose what to share. It <strong>reads</strong> steps, energy, heart rate, heart rate variability, sleep and workouts in order to show what you have burned against what you have eaten. It <strong>writes</strong> the meals you log back to Health as dietary energy and macros, so other apps you use can see them.</p>
-<p>Health data is read on your device and used on your device. <strong>It is never uploaded, never sent to any third party, and never used for advertising.</strong> You can withdraw any permission at any time in the Health app, under Sharing.</p>
+<p>Agni asks permission before reading anything, and you choose what to share. It <strong>reads</strong> steps, energy, heart rate, heart rate variability, sleep and workouts to show what you have burned against what you have eaten and to read your recovery. It <strong>writes</strong> the meals you log back to Health as dietary energy and macros, so other apps you use can see them.</p>
+<p>Health data is read on your device and used on your device. <strong>It is not uploaded, not sent to any third party, and never used for advertising.</strong> You can withdraw any permission at any time in the Health app, under Sharing.</p>
+
+<h2>AI analysis, and your permission</h2>
+<ul>
+  <li><strong>Asking first.</strong> In Agni 1.0 (build 180) and later, the first time you use an AI feature (a meal photo, a nutrition label, an AI food search or an ingredient lookup), Agni shows a screen that names Anthropic, says what will be sent, and asks you to choose Allow or Not now. Nothing is sent unless you choose Allow.</li>
+  <li><strong>Not now</strong> sends nothing. It is not remembered, so the next time you use an AI feature Agni asks again.</li>
+  <li><strong>Allow</strong> is remembered, and Agni stops asking.</li>
+  <li><strong>Turning it off.</strong> Settings &gt; Agni Pro &gt; Allow AI analysis shows your choice. Switching it off does not block AI; it returns Agni to asking before every AI use, and nothing is sent unless you choose Allow again.</li>
+  <li>Without AI you can still log meals by hand, with search, barcode scanning and quick add.</li>
+</ul>
 
 <h2>What leaves your device, and why</h2>
 <div class="tw">
 <table>
-  <tr><th>What</th><th>Where it goes</th><th>What happens to it</th></tr>
+  <tr><th>What</th><th>When</th><th>Where it goes</th><th>What happens to it</th></tr>
   <tr>
-    <td><b>A meal photograph</b><br>only when you take one</td>
+    <td><b>A meal photo or a nutrition-label photo</b></td>
+    <td>Only when you use AI analysis and have allowed it</td>
     <td>Agni's server, then Anthropic's Claude API</td>
-    <td><b>Analysed and discarded.</b> It is passed straight through and never written to any database or file store.</td>
+    <td>Agni's server passes it through and <b>does not save it</b>. Anthropic's retention is below.</td>
   </tr>
   <tr>
-    <td><b>A dish name and its nutrition figures</b><br>per serving, not what you ate</td>
+    <td><b>A food or ingredient name you look up with AI</b></td>
+    <td>Only when you use AI food search or an ingredient lookup and have allowed it</td>
+    <td>Agni's server, then Anthropic. For ingredient lookups, Anthropic runs web searches based on the food name. Some lookups go to USDA FoodData Central instead</td>
+    <td>The answer is cached on Agni's server under the food name, so the next person asking gets it without another AI call. The cache entry holds the food name and the answer, nothing about who asked.</td>
+  </tr>
+  <tr>
+    <td><b>A dish name and its per-serving nutrition</b></td>
+    <td>When you save a meal with a dish Agni's table does not have</td>
     <td>Agni's server</td>
-    <td>Kept, so the shared dish table improves for everyone. It records that <em>a</em> dish exists and what one serving is worth, not that you ate it.</td>
+    <td>Kept so the shared dish table improves; it records what one serving of a dish is worth, not what or when you ate. It is stored with a contributor code calculated from your install identifier, so one phone counts once towards publishing a dish. I can recalculate that code from an install identifier, so it is pseudonymous and linkable to your other records by me, not anonymous.</td>
   </tr>
   <tr>
-    <td><b>A dish Agni could not find</b></td>
+    <td><b>The name of a dish Agni could not find</b></td>
+    <td>When a lookup misses</td>
     <td>Agni's server</td>
-    <td>Counted, so I know which foods to add next.</td>
+    <td>Counted, so I know which foods to add next, with the same contributor code.</td>
   </tr>
   <tr>
-    <td><b>A food name you search for</b></td>
-    <td>USDA FoodData Central, FatSecret, or Claude</td>
-    <td>Used to answer that one lookup. Sent as a plain food name with nothing attached to it.</td>
-  </tr>
-  <tr>
-    <td><b>An anonymous install identifier</b></td>
+    <td><b>An install identifier</b></td>
+    <td>With every request to Agni's server</td>
     <td>Agni's server</td>
-    <td>A random value created on first launch. It counts how many free estimates that copy of the app has used. It identifies a phone, not a person.</td>
+    <td>A random value created on your phone, kept in the iPhone Keychain. It persists across app updates and usually across reinstalling. It is not your Apple ID, phone number or advertising identifier. It is the key to your Free sample and usage records, so it is pseudonymous: it does not name you, but every record attached to it is about the same copy of Agni.</td>
+  </tr>
+  <tr>
+    <td><b>An App Attest proof</b></td>
+    <td>With every request to Agni's server</td>
+    <td>Agni's server, checked with Apple's App Attest service</td>
+    <td>Proves the request came from a genuine copy of Agni on a real Apple device. The server keeps the key's identifier, its public key and counters. That key is tied to your install and stays the same until the app is reinstalled or the key is replaced, so it is another persistent pseudonymous identifier.</td>
+  </tr>
+  <tr>
+    <td><b>Your subscription status</b></td>
+    <td>When you subscribe, renew, restore or cancel</td>
+    <td>Your phone sends Apple's signed transaction to Agni's server, and Apple sends the server notices of renewals, cancellations and refunds</td>
+    <td>The server keeps Apple's transaction identifiers, the plan, purchase and expiry dates, whether it is a trial, whether it will renew, and any refund. These identifiers stay the same for the life of the subscription, link every device you use it on, and can be connected by Apple to your Apple Account. Apple never gives me your name, email address or payment details.</td>
+  </tr>
+  <tr>
+    <td><b>Usage records</b></td>
+    <td>Each time you use an AI feature</td>
+    <td>Agni's server</td>
+    <td>Which feature, when, which AI model, how many tokens it used, what it cost and whether it worked. They are linked to your install identifier, or to your subscription's transaction identifier when you subscribe. Never the photo, the food name or the meal. They make allowances and limits work. If the cost safeguard pauses your AI use before your allowance is used, the server also records that (which period, how far through your allowance you were, and what it had cost) so I can find it when you write in.</td>
+  </tr>
+  <tr>
+    <td><b>Your IP address</b></td>
+    <td>With every request, as part of how the internet works</td>
+    <td>Vercel, which runs Agni's server</td>
+    <td>Kept in Vercel's request logs (see below). Agni's server separately keeps a salted, one-way hash of it, only to stop one address flooding the service, and normally removes it soon after it is a day old.</td>
   </tr>
 </table>
 </div>
-<p>That is the complete list. Nothing else is transmitted.</p>
-
-<h3>What the install identifier is, and is not</h3>
-<p>It is a random value with no meaning. It is not your Apple ID, not your device's advertising identifier, not your phone number and not derived from anything about you. Its only job is counting free estimates so the shared service is not drained by one copy of the app. It cannot be traced back to who you are, because I never learn who you are.</p>
+<p>Daily totals of requests by feature and by app version are also kept, with no identifier of any kind, so I can see whether a new build is working.</p>
+<p>That is the complete list of what Agni sends.</p>
 
 <h2>The companies involved</h2>
-<p>Three services make Agni work. None of them receives your health data.</p>
+<p>I do not sell your information. I share it only with the service providers below, only to run the features you use, and <strong>none of them receives your Apple Health data or your diary</strong>.</p>
 <ul>
-  <li><strong>Anthropic</strong> analyses meal photographs and answers food questions. Photographs reach them without any identifier attached. Their handling of API data is set out in their own privacy policy and commercial terms.</li>
-  <li><strong>Vercel</strong> runs Agni's server, which passes photographs through and keeps the dish table.</li>
-  <li><strong>Supabase</strong> holds that dish table, the usage counts and, if you asked for a beta invitation, your email address.</li>
+  <li><strong>Anthropic</strong> analyses photos and answers food questions. Requests reach Anthropic from Agni's server with no identifier of yours attached. Anthropic's commercial terms say it &ldquo;may not train models on Customer Content&rdquo;. Agni uses Anthropic's Claude Sonnet and Claude Haiku models.</li>
+  <li><strong>Vercel</strong> runs Agni's server in its US East (Washington, D.C.) region.</li>
+  <li><strong>Supabase</strong> holds Agni's database in its US East (North Virginia) region: the dish table, the caches, usage records, subscription status and, if you asked for a beta invitation, your email address.</li>
+  <li><strong>USDA FoodData Central</strong> answers some food lookups. It receives a food name from Agni's server and nothing else.</li>
+  <li><strong>Apple</strong> processes your subscription payment, checks App Attest proofs, and sends the server subscription notices. Apple's own privacy policy covers what Apple does.</li>
 </ul>
-<p>USDA FoodData Central and FatSecret answer food lookups. They receive a food name and nothing else.</p>
+
+<h2>How long things are kept</h2>
+<div class="tw">
+<table>
+  <tr><th>Item</th><th>How long</th></tr>
+  <tr><td><b>Your diary, Health data and settings</b></td><td>On your phone until you delete them or the app (see the exceptions above)</td></tr>
+  <tr><td><b>Photos and food names sent for AI analysis</b></td><td>Not saved by Agni's server. Anthropic deletes API inputs and outputs within 30 days of receiving them. If its automated safety systems flag a request as violating its Usage Policy, it may keep that request for up to 2 years, and safety classification scores for up to 7 years. It may also keep data longer where the law requires.</td></tr>
+  <tr><td><b>AI food search answers, ingredient lookup answers, usage records, cost-safeguard stop records, and subscription records with Apple's notices</b></td><td>Kept until a scheduled cleanup is in place; I will update this page with the periods when it is.</td></tr>
+  <tr><td><b>Shared dish table entries and missed-dish counts</b></td><td>Kept while the dish table is in use</td></tr>
+  <tr><td><b>Free-sample markers, install records and App Attest keys</b></td><td>Kept to stop the Free sample being claimed again from the same phone. There is no fixed deletion date for these yet, and a request to delete your server data does not remove them, for the same reason.</td></tr>
+  <tr><td><b>Hashed IP address</b></td><td>Normally removed soon after it is a day old</td></tr>
+  <tr><td><b>Vercel request logs</b> (IP address, time, path; not request contents)</td><td>Up to 30 days. No server or database logs are forwarded to any other service.</td></tr>
+  <tr><td><b>Database backups</b></td><td>Deleted records stay in Agni's daily database backups until those backups expire, up to 7 days later.</td></tr>
+  <tr><td><b>Beta invitation email and name</b></td><td>Kept until you ask me to delete it.</td></tr>
+</table>
+</div>
 
 <h2>If you joined the beta</h2>
-<p>If you entered your email address to ask for a TestFlight invitation, that address and your name are kept so the invitation can be sent and so I can answer you. Your IP address is kept briefly, only to stop the form being abused, and is never shown to anybody. Ask me and I will delete all of it.</p>
-
-<h2>Using your own API key</h2>
-<p>If you add your own Anthropic API key in Settings, Agni talks to Anthropic directly from your phone and <strong>none of my servers are involved at all</strong>. The key is held in your iPhone's Keychain, is never transmitted to me, and I cannot read it.</p>
-
-<h2>Children</h2>
-<p>Agni is not designed for or directed at children under 13, and I do not knowingly collect anything from them.</p>
+<p>If you entered your email address to ask for a TestFlight invitation, that address and your name are kept so the invitation can be sent and so I can answer you. Your IP address is kept briefly, only to stop the form being abused. Write to me from that address and I will delete all of it.</p>
 
 <h2>What I do not do</h2>
 <ul>
   <li>No advertising, and no advertising identifiers</li>
-  <li>No third-party analytics or tracking SDKs</li>
-  <li>No selling or sharing of anything, to anyone, ever</li>
-  <li>No profile of you, because there is no account to attach one to</li>
+  <li>No third-party analytics or tracking SDKs, and no tracking across other companies' apps or websites</li>
+  <li>No selling of your information</li>
+  <li>No account, and no profile tied to your name</li>
 </ul>
 
+<h2>Children</h2>
+<p>Agni is not designed for or directed at children under 13, and I do not knowingly collect anything from them.</p>
+
 <h2>Your rights, and how to use them</h2>
-<p>Because Agni holds your food and health data on your own device, <strong>you already control almost all of it</strong>. Deleting a meal deletes it. Deleting the app deletes everything it held.</p>
-<p>For the small amount kept on the server, write to me and I will delete it. Depending on where you live you may have rights under the GDPR or the California Consumer Privacy Act to see, correct, export or delete what is held about you, and to complain to your data protection authority. Ask and I will do it; I do not require a reason.</p>
+<p>Your diary and Health data are on your own device, so <strong>you control them directly</strong>.</p>
+<p>For what is kept on the server: write to me. Because there is no account, I can only act on records I can verify are yours.</p>
+<p>Depending on where you live, you may have rights under the GDPR, the UK GDPR or the California Consumer Privacy Act to see, correct, export or delete what is held about you, to object to its use, and to complain to your data protection authority.</p>
+<p>Agni's server and database are in the United States. If you use Agni from elsewhere, the limited information above is processed there.</p>
 
 <h2>Changes to this policy</h2>
 <p>If this changes in a way that matters, the date at the top changes and the app will say so. I will not quietly broaden what Agni does with your information.</p>
 
 <h2>Contact</h2>
-<p>Write to <a href="mailto:shine_e_thankappan@yahoo.com">shine_e_thankappan@yahoo.com</a>. As the person who built it, I answer every message myself.</p>
+<p>Write to <a href="mailto:shine_e_thankappan@yahoo.com">shine_e_thankappan@yahoo.com</a>. I answer every message myself.</p>
 
 <footer>
   Agni &middot; <a href="https://agnilog.app/terms">Terms of Use</a> &middot; <a href="https://agnilog.app/join">agnilog.app/join</a><br>
-  Photographs are analysed and discarded, never kept on a server. A small thumbnail stays on your phone so you can see your own meals.
+  Agni's server does not keep your photos. A small thumbnail stays on your phone so you can see your own meals.
 </footer>
 
 </div>
