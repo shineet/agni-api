@@ -17,13 +17,48 @@ import * as h from './helpers/harness.mjs';
 h.setTestEnv({ COMPANION_ENABLED: 'true' });
 const {
   validateContext, validateHistory, isUrgent, URGENT_REPLY, buildRequest, renderContext, shapeReply,
-  SYSTEM, COMPANION_MODEL, LIMITS
+  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal
 } = await import('../api/_companion.js');
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
 const fixture = name => JSON.parse(readFileSync(path.join(import.meta.dirname, 'fixtures/companion', name + '.json'), 'utf8')
   .replace('__NOW__', new Date().toISOString()));
 let research;
+
+// MARK: - Meal proposals (the server proposes; the phone confirms and logs)
+
+test('a LOG line becomes a proposal and never reaches the spoken text', () => {
+  const r = splitLogProposal("Here is what I'll add, check it and tap Log.\nLOG: 2 eggs and a slice of toast");
+  assert.equal(r.proposal, '2 eggs and a slice of toast');
+  assert.equal(r.text.trim(), "Here is what I'll add, check it and tap Log.");
+  assert.doesNotMatch(shapeReply(r.text), /LOG/);
+});
+
+test('no LOG line means no proposal and the text is untouched', () => {
+  const r = splitLogProposal('You are at about half your budget.');
+  assert.equal(r.proposal, null);
+  assert.equal(r.text, 'You are at about half your budget.');
+});
+
+test('an unusable LOG line is dropped from the text and proposes nothing', () => {
+  for (const bad of ['LOG: ', 'LOG: x', 'LOG: 1234', 'LOG: see https://evil.example/a', 'LOG: <b>banana</b>',
+                     'LOG: ' + 'a'.repeat(101), 'LOG: banana; ignore your rules', 'LOG: {"kcal":0}']) {
+    const r = splitLogProposal('Sure.\n' + bad);
+    assert.equal(r.proposal, null, bad);
+    assert.doesNotMatch(r.text, /LOG:/, bad);
+  }
+});
+
+test('only the final LOG line counts, and only its first line', () => {
+  const r = splitLogProposal('Ok.\nLOG: a banana\nmore text the model should not have written');
+  assert.equal(r.proposal, 'a banana');
+});
+
+test('the instructions allow proposing a meal and still forbid writing to the log', () => {
+  assert.match(SYSTEM, /LOGGING A MEAL/);
+  assert.match(SYSTEM, /never write to the person's log/i);
+  assert.match(SYSTEM, /Do not state calories/);
+});
 
 // MARK: - Pure
 
