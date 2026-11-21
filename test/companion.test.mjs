@@ -110,6 +110,31 @@ test('every tier keeps the cost cap and the one-at-a-time rule', () => {
   }
 });
 
+// MARK: - Health choice
+
+test('a food-only summary (Health withheld) is valid, and the instructions say how to behave', () => {
+  const full = fixture('full');
+  const withheld = {
+    v: full.v, generatedAt: full.generatedAt, localDate: full.localDate, localTime: full.localTime,
+    timeZone: full.timeZone, units: full.units, healthShared: false,
+    food: { eatenKcal: full.food.eatenKcal, proteinG: full.food.proteinG, mealsLogged: full.food.mealsLogged,
+            loggedSlots: full.food.loggedSlots, skippedSlots: full.food.skippedSlots, logging: full.food.logging },
+    missing: ['Health data (kept private from Aura)']
+  };
+  assert.equal(validateContext(withheld), null);
+  assert.match(SYSTEM, /HEALTH CHOICE/);
+  assert.match(SYSTEM, /healthShared is false/);
+  assert.match(validateContext({ ...withheld, healthShared: 'no' }) || '', /true or false/);
+  // The rendered summary the model sees carries the flag and none of the withheld sections.
+  const rendered = renderContext(withheld);
+  assert.match(rendered, /"healthShared":false/);
+  // The sections themselves (an object follows the key), not the "sleep":"hours" unit label.
+  for (const key of ['movement', 'sleep', 'recovery', 'forYouNow', 'reading']) {
+    assert.doesNotMatch(rendered, new RegExp('"' + key + '":\\{'), key);
+  }
+  assert.doesNotMatch(rendered, /"budgetKcal"/);
+});
+
 // MARK: - Pure
 
 test('the three fixture days are valid summaries; unknown keys and oversize are refused', () => {
