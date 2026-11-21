@@ -43,7 +43,12 @@ globalThis.fetch = async (url, options) => {
     if (live) return realFetch(url, options);
     const body = JSON.parse(options.body);
     const asked = body.messages.at(-1).content;
-    const text = `(stub provider) I heard "${String(asked).slice(0, 80)}". A real model would answer here from today's summary.`;
+    // A stubbed model that proposes a meal when asked to log one, so the whole path (server parse,
+    // phone card) can be exercised without a key. A real model's behaviour is NOT shown by this.
+    const logAsk = /^\s*(?:please\s+)?(?:log|add|record)\s+(.+?)\s*$/i.exec(String(asked));
+    const text = logAsk && !String(asked).trim().endsWith('?')
+      ? `(stub provider) Here is what I'll add, check it and tap Log.\nLOG: ${logAsk[1].slice(0, 90)}`
+      : `(stub provider) I heard "${String(asked).slice(0, 80)}". A real model would answer here from today's summary.`;
     return new Response(JSON.stringify({ content: [{ type: 'text', text }],
                                          usage: { input_tokens: 0, output_tokens: 0 } }),
                         { status: 200, headers: { 'content-type': 'application/json', 'request-id': 'stub' } });
