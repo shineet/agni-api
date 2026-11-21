@@ -42,14 +42,21 @@ export function companionEnabled() {
   return (process.env.COMPANION_ENABLED || 'false').toLowerCase() === 'true';
 }
 
-/// The prototype's own budget, separate from every allowance. Per subject per
-/// UTC day; the database adds a ceiling across everyone (companion_day_cap_usd).
-export function companionLimits() {
+/// The companion's own budget, separate from every allowance. Per subject per UTC day; the
+/// database adds a ceiling across everyone (companion_day_cap_usd).
+///
+/// FREE gets a small sample (3 questions a day, a logged meal counts as one) so everyone can meet
+/// Aura; Pro, a trial and an unenforced (legacy) caller get the full daily allowance. The cost cap
+/// and the one-at-a-time rule apply to everybody.
+export const FREE_PER_DAY = Number(process.env.COMPANION_FREE_PER_DAY || 3);
+
+export function companionLimits(caller) {
+  const free = caller?.tier === 'free';
   return {
     costCapUSD: null,
     dayCostCapUSD: Number(process.env.COMPANION_DAY_CAP_USD || 0.25),
     burst: null,
-    uncreditedDayCap: Number(process.env.COMPANION_MESSAGES_PER_DAY || 40),
+    uncreditedDayCap: free ? FREE_PER_DAY : Number(process.env.COMPANION_MESSAGES_PER_DAY || 40),
     maxOpen: 1
   };
 }
@@ -338,7 +345,7 @@ export async function companionHandler(req, res) {
       tier: 'companion', budgetTier: 'companion', authPath: auth.path,
       feature: 'companion', bucket: 'companion', counts: false,
       actionId: requestId, requestId, model: COMPANION_MODEL,
-      period: { start: new Date(0), end: 'infinity' }, reserveUSD, limits: companionLimits()
+      period: { start: new Date(0), end: 'infinity' }, reserveUSD, limits: companionLimits(caller)
     }, async () => {
       let upstream;
       try {
@@ -375,7 +382,8 @@ export async function companionHandler(req, res) {
     const reason = result.refused.reason;
     console.log(`[agni-companion] ${requestId} refused=${reason} ms=${tookMs}`);
     const status = reason === 'busy' || reason === 'in_flight' || reason === 'duplicate' ? 409 : 429;
-    return json(res, status, { error: 'limit', reason });
+    // The tier lets the app say WHICH limit: Free's three a day (with the Pro offer) or the daily ceiling.
+    return json(res, status, { error: 'limit', reason, tier: caller.tier === 'free' ? 'free' : 'paid', freePerDay: FREE_PER_DAY });
   }
   const { outcome } = result;
   const usage = outcome.usage || {};

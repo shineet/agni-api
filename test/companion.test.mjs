@@ -17,7 +17,7 @@ import * as h from './helpers/harness.mjs';
 h.setTestEnv({ COMPANION_ENABLED: 'true' });
 const {
   validateContext, validateHistory, isUrgent, URGENT_REPLY, buildRequest, renderContext, shapeReply,
-  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, splitFollowups
+  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, splitFollowups, companionLimits, FREE_PER_DAY
 } = await import('../api/_companion.js');
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
@@ -90,6 +90,24 @@ test('follow-ups and a meal proposal come apart in the right order', () => {
 test('the instructions allow follow-ups but keep them to the person\'s own day', () => {
   assert.match(SYSTEM, /FOLLOW-UPS/);
   assert.match(SYSTEM, /never for an urgent or medical matter/);
+});
+
+// MARK: - Free sample versus Pro
+
+test('Free gets three questions a day; Pro, a trial and an unenforced caller get the full allowance', () => {
+  assert.equal(FREE_PER_DAY, 3);
+  assert.equal(companionLimits({ tier: 'free' }).uncreditedDayCap, 3);
+  for (const tier of ['pro', 'trial', 'legacy']) assert.equal(companionLimits({ tier }).uncreditedDayCap, 40, tier);
+  assert.equal(companionLimits(undefined).uncreditedDayCap, 40);
+});
+
+test('every tier keeps the cost cap and the one-at-a-time rule', () => {
+  for (const tier of ['free', 'pro']) {
+    const l = companionLimits({ tier });
+    assert.equal(l.maxOpen, 1);
+    assert.ok(l.dayCostCapUSD > 0);
+    assert.equal(l.costCapUSD, null);
+  }
 });
 
 // MARK: - Pure
@@ -253,6 +271,9 @@ test('the shared token is refused unless a development deployment allows it', { 
 });
 
 test('its own daily message limit, separate from every allowance', { skip }, async () => {
+  // The ceiling for a caller who is not on the Free sample (billing unenforced makes a legacy
+  // caller); Free's own three-a-day is tested below.
+  h.setTestEnv({ COMPANION_ENABLED: 'true', BILLING_ENFORCED: 'false' });
   process.env.COMPANION_MESSAGES_PER_DAY = '2';
   const dev = await h.device();
   for (let i = 0; i < 2; i += 1) {
@@ -262,6 +283,22 @@ test('its own daily message limit, separate from every allowance', { skip }, asy
   const third = await ask(dev, { message: 'q3' });
   assert.equal(third.statusCode, 429);
   assert.equal(h.anthropic.calls.length, 2);
+  h.setTestEnv({ BILLING_ENFORCED: 'true' });
+});
+
+test('a Free caller gets three questions a day, then a clear limit that names the tier', { skip }, async () => {
+  h.setTestEnv({ COMPANION_ENABLED: 'true', BILLING_ENFORCED: 'true' });
+  const dev = await h.device();
+  for (let i = 0; i < FREE_PER_DAY; i += 1) {
+    h.anthropic.next(spoken('Fine.'));
+    assert.equal((await ask(dev, { message: 'q' + i })).statusCode, 200, 'question ' + (i + 1));
+  }
+  const fourth = await ask(dev, { message: 'one more' });
+  assert.equal(fourth.statusCode, 429);
+  assert.equal(fourth.json.error, 'limit');
+  assert.equal(fourth.json.tier, 'free');
+  assert.equal(fourth.json.freePerDay, 3);
+  assert.equal(h.anthropic.calls.length, FREE_PER_DAY, 'the model was not called for the refused one');
 });
 
 test('the same request id twice reaches the provider once', { skip }, async () => {
