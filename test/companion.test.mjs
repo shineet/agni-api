@@ -17,7 +17,7 @@ import * as h from './helpers/harness.mjs';
 h.setTestEnv({ COMPANION_ENABLED: 'true' });
 const {
   validateContext, validateHistory, isUrgent, URGENT_REPLY, buildRequest, renderContext, shapeReply,
-  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal
+  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, splitFollowups
 } = await import('../api/_companion.js');
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
@@ -58,6 +58,38 @@ test('the instructions allow proposing a meal and still forbid writing to the lo
   assert.match(SYSTEM, /LOGGING A MEAL/);
   assert.match(SYSTEM, /never write to the person's log/i);
   assert.match(SYSTEM, /Do not state calories/);
+});
+
+// MARK: - Follow-up suggestions
+
+test('a FOLLOWUPS line becomes up to three short questions and is never spoken', () => {
+  const r = splitFollowups('You are at about half your budget.\nFOLLOWUPS: How is my protein? | Did I sleep enough? | What should dinner be? | a fourth');
+  assert.deepEqual(r.followups, ['How is my protein?', 'Did I sleep enough?', 'What should dinner be?']);
+  assert.equal(r.text.trim(), 'You are at about half your budget.');
+});
+
+test('no FOLLOWUPS line means none and the text is untouched', () => {
+  const r = splitFollowups('Just an answer.');
+  assert.deepEqual(r, { text: 'Just an answer.', followups: [] });
+});
+
+test('unusable follow-ups are dropped: markup, links, too long, too short', () => {
+  const r = splitFollowups('Ok.\nFOLLOWUPS: <b>hi there</b> | see https://x.example | ' + 'x'.repeat(80) + ' | no | How is my day?');
+  assert.deepEqual(r.followups, ['How is my day?']);
+});
+
+test('follow-ups and a meal proposal come apart in the right order', () => {
+  const full = "Here is what I'll add, check it and tap Log.\nLOG: a banana\nFOLLOWUPS: How is my protein? | What is left today?";
+  const a = splitFollowups(full);
+  const b = splitLogProposal(a.text);
+  assert.equal(b.proposal, 'a banana');
+  assert.deepEqual(a.followups, ['How is my protein?', 'What is left today?']);
+  assert.doesNotMatch(shapeReply(b.text), /LOG|FOLLOWUPS/);
+});
+
+test('the instructions allow follow-ups but keep them to the person\'s own day', () => {
+  assert.match(SYSTEM, /FOLLOW-UPS/);
+  assert.match(SYSTEM, /never for an urgent or medical matter/);
 });
 
 // MARK: - Pure
