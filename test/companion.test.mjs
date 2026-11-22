@@ -17,7 +17,7 @@ import * as h from './helpers/harness.mjs';
 h.setTestEnv({ COMPANION_ENABLED: 'true' });
 const {
   validateContext, validateHistory, isUrgent, URGENT_REPLY, buildRequest, renderContext, shapeReply,
-  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, splitFollowups, companionLimits, FREE_PER_DAY
+  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, stripMealWords, splitFollowups, companionLimits, FREE_PER_DAY
 } = await import('../api/_companion.js');
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
@@ -26,6 +26,14 @@ const fixture = name => JSON.parse(readFileSync(path.join(import.meta.dirname, '
 let research;
 
 // MARK: - Meal proposals (the server proposes; the phone confirms and logs)
+
+test('meal and time words are not part of the food ("apple for breakfast" is "apple")', () => {
+  assert.equal(stripMealWords('apple for breakfast'), 'apple');
+  assert.equal(stripMealWords('2 eggs and toast this morning'), '2 eggs and toast');
+  assert.equal(stripMealWords('a banana'), 'a banana');
+  assert.equal(stripMealWords('lunch'), 'lunch');   // nothing left to keep: unchanged
+  assert.equal(splitLogProposal('Here is what I will add.\nLOG: an apple for breakfast').proposal, 'an apple');
+});
 
 test('a LOG line becomes a proposal and never reaches the spoken text', () => {
   const r = splitLogProposal("Here is what I'll add, check it and tap Log.\nLOG: 2 eggs and a slice of toast");
