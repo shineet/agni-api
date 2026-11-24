@@ -66,7 +66,7 @@ footer a{color:var(--ink3)}
 
 <header>
   <div class="brand"><svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0894A" d="M12 1.6c.5 3.4-1.3 4.7-2.7 6.2C7.7 9.5 6.4 11 6.4 13.6a5.6 5.6 0 0 0 11.2 0c0-2-.8-3.3-1.8-4.6-.4 1-1 1.7-1.8 2.1.5-2.3-.1-4.6-2-9.5Z"/></svg><b>Agni</b><span>Better Choices<br>A Brighter You</span></div>
-  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; Last updated 21 November 2026</p>
+  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; Last updated 23 November 2026</p>
   <h1>Your food diary and your health data stay on your phone.</h1>
   <p class="lede">Agni has <strong>no accounts and no sign-in</strong>, and it does not ask for your name. This page sets out what the app keeps on your phone, what it sends away and why, who receives it, and how long it is kept.</p>
 </header>
@@ -102,7 +102,8 @@ footer a{color:var(--ink3)}
   <li>everything Agni reads from <strong>Apple Health</strong> (steps, energy burned, heart rate, heart rate variability, sleep and workouts);</li>
   <li>your body details, weight, goals and targets;</li>
   <li>your settings;</li>
-  <li>your conversation with Aura, in locked storage, until you start a new conversation or delete your data;</li>
+  <li>your conversations with Aura, in locked storage, for as long as you choose (see &ldquo;Talking to Aura&rdquo;);</li>
+  <li>if you use Teach Aura your voice, a small set of numbers that tunes how she recognises her name. The recordings themselves are not kept;</li>
   <li>everything Agni tells you, including &ldquo;For you now&rdquo;, recovery and movement assessments and workout notes. These are worked out on your phone.</li>
 </ul>
 <p>None of this is uploaded as a diary. The specific pieces listed under &ldquo;What leaves your device&rdquo; are the only exceptions, and only when you use those features.</p>
@@ -130,9 +131,11 @@ footer a{color:var(--ink3)}
 <h2>Talking to Aura</h2>
 <p>Aura is an AI assistant, not a person and not a clinician. She cannot monitor your health or contact anyone, and a message about an emergency gets a fixed reply pointing to emergency services, with no AI involved.</p>
 <ul>
-  <li><strong>Your voice stays on your iPhone.</strong> If you speak to Aura, your voice is turned into text on your iPhone only, using Apple's on-device speech recognition with no fallback to a network service. Agni does not record or store the audio. Only the recognised words are sent, exactly as if you had typed them. Aura's replies are read aloud with your iPhone's own voice.</li>
-  <li><strong>The conversation stays on your iPhone.</strong> It is kept in locked storage, unreadable while the phone is locked, until you tap New conversation, delete your data in Settings, or delete the app. Agni's server does not keep it. So that a follow-up question makes sense, the last few messages are sent with each new question.</li>
-  <li><strong>Aura never changes your diary by herself.</strong> She can suggest a meal to log. The suggestion is priced on your iPhone from Agni's own food table, and nothing is added until you tap Log. You can undo it.</li>
+  <li><strong>Your voice stays on your iPhone.</strong> If you speak to Aura, your voice is turned into text on your iPhone only, using Apple's on-device speech recognition with no fallback to a network service. Agni does not record or store the audio. Only the recognised words are sent, exactly as if you had typed them. Aura's replies are read aloud on your iPhone, with Apple's voice or, if you choose to download one, a more natural voice that also runs on the phone. Downloading a voice fetches its files from huggingface.co; nothing about you or your food log is sent.</li>
+  <li><strong>When Aura is listening.</strong> Agni 1.2 and later can wait for &ldquo;Hey Aura&rdquo; while Agni is on screen, if you turn that on. The waiting is done on your iPhone by recognising the sound of her name; what is heard while waiting is discarded as it arrives. After an answer to a spoken question she keeps listening for about six seconds for a follow-up, and while she is speaking she can listen so that you can talk over her. All of it is on your iPhone, and iOS shows the microphone indicator whenever she is listening. Agni does not listen while it is not on screen. If you set up Apple's Vocal Shortcuts to open Aura from elsewhere, it is Apple's feature that listens, under Apple's terms.</li>
+  <li><strong>Questions answered on the phone.</strong> Some questions, such as what you ate or how much water you drank, are answered on your iPhone from your own records. Those questions and answers are not sent; later questions only carry a note that one was answered on the phone.</li>
+  <li><strong>The conversation stays on your iPhone.</strong> It is kept in locked storage, unreadable while the phone is locked. In Agni 1.2 and later each visit is a new conversation, and earlier ones are kept for 30 days unless you choose 7 days, a year, or not at all; you can delete any of them, or all of them, under the clock on Aura&rsquo;s screen. In earlier versions the one conversation is kept until you tap New conversation. Deleting your data in Settings or deleting the app removes them. Agni's server does not keep it. So that a follow-up question makes sense, the last few messages are sent with each new question.</li>
+  <li><strong>Aura never changes your diary by herself.</strong> She can suggest a meal to log. The suggestion is priced on your iPhone from Agni's own food table, and nothing is added until you tap Log or say yes. You can undo it. In Agni 1.2 and later, asking her to log water adds it straight away, as you asked.</li>
   <li><strong>Free and Pro.</strong> Free accounts can ask Aura a few questions a day; Agni Pro has a larger daily allowance. Agni's server counts questions per day to apply this.</li>
 </ul>
 
@@ -226,7 +229,7 @@ footer a{color:var(--ink3)}
 <div class="tw">
 <table>
   <tr><th>Item</th><th>How long</th></tr>
-  <tr><td><b>Your conversation with Aura</b></td><td>On your phone, in locked storage, until you tap New conversation, delete your data, or delete the app. Not kept on Agni's server.</td></tr>
+  <tr><td><b>Your conversation with Aura</b></td><td>On your phone, in locked storage. Agni 1.2 and later: 30 days unless you choose 7 days, a year or not at all. Earlier versions: until you tap New conversation. Deleted sooner if you delete it, your data, or the app. Not kept on Agni's server.</td></tr>
   <tr><td><b>Your diary, Health data and settings</b></td><td>On your phone until you delete them or the app (see the exceptions above)</td></tr>
   <tr><td><b>Photos and food names sent for AI analysis</b></td><td>Not saved by Agni's server. Anthropic deletes API inputs and outputs within 30 days of receiving them. If its automated safety systems flag a request as violating its Usage Policy, it may keep that request for up to 2 years, and safety classification scores for up to 7 years. It may also keep data longer where the law requires.</td></tr>
   <tr><td><b>AI food search answers, ingredient lookup answers, usage records, cost-safeguard stop records, and subscription records with Apple's notices</b></td><td>Kept until a scheduled cleanup is in place; I will update this page with the periods when it is.</td></tr>
