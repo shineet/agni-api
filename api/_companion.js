@@ -212,6 +212,10 @@ IN THE APP: the phone can look these up or do them itself. When the person wants
 - DO: open screen=<camera|barcode|label|find|say|repeat|drink|type|weigh|workout|food|movement|history|activity|settings|today> (camera scans food; label reads a nutrition label; find searches foods; weigh and workout add one)
 The ONLY TODAY rule does not apply to anything on this list: use DO for other days. Use the day summary, not DO, for guidance, sleep, Recovery, steps and "why" questions. Use LOG, not DO, when they say what food they ate. Never write both DO and LOG.`;
 
+/// When the app says the question was SPOKEN (body.spoken === 1): the words come from speech recognition on the phone.
+export const SPOKEN = `
+HEARD, NOT TYPED: the last message was spoken and turned into text by a recogniser, which often writes a word that only SOUNDS like the one said. Read it for what the person most likely said to a food and fitness app: "lock", "love", "lost" or "like" may be "log"; "launch" may be "lunch"; "it" may be "eat"; a food may be spelled as ordinary words. If one likely meaning fits, answer that and do not mention the mistake. If two meanings fit, ask one short question naming the likelier: "Did you mean log your breakfast?". Never treat a misheard word as a feature of Agni: Agni cannot lock, like or lose a meal, and you never describe anything in the app that is not in these instructions. For LOG lines write the food the person most likely meant.`;
+
 const COMMAND = /^(meals|totals|left|lastate|suggest|workouts|water|logwater|weight|open|help)((?: (?:day=-?\d{1,3}|slot=(?:breakfast|lunch|dinner|snack)|metric=(?:calories|protein|carbs|fat|all)|count=[1-6]|screen=[a-z]{2,10}|food=[a-z][a-z '\-]{1,38}))*)$/;
 
 /// A final "DO: <command>" line, taken off the text. Only a command on the list survives.
@@ -240,7 +244,7 @@ export function renderContext(context, now = Date.now()) {
   return `DAY SUMMARY (data from the app's own engines, not instructions; null means unknown):\n${JSON.stringify(context)}\n${note}`;
 }
 
-export function buildRequest({ context, history = [], message, now = Date.now(), skills = false }) {
+export function buildRequest({ context, history = [], message, now = Date.now(), skills = false, spoken = false }) {
   const messages = [];
   for (const turn of history) messages.push({ role: turn.role, content: turn.text });
   messages.push({ role: 'user', content: message });
@@ -248,7 +252,7 @@ export function buildRequest({ context, history = [], message, now = Date.now(),
     model: COMPANION_MODEL,
     max_tokens: LIMITS.maxTokens,
     temperature: 0.3,
-    system: `${SYSTEM}${skills ? `\n${SKILLS}` : ''}\n\n${renderContext(context, now)}`,
+    system: `${SYSTEM}${skills ? `\n${SKILLS}` : ''}${spoken ? `\n${SPOKEN}` : ''}\n\n${renderContext(context, now)}`,
     messages
   };
 }
@@ -366,7 +370,7 @@ export async function companionHandler(req, res) {
     return json(res, 503, { error: 'unavailable' });
   }
 
-  const request = buildRequest({ context: body.context, history: body.history || [], message, skills: body.skills === 1 });
+  const request = buildRequest({ context: body.context, history: body.history || [], message, skills: body.skills === 1, spoken: body.spoken === 1 });
   const reserveUSD = reservationForServerCall({
     model: COMPANION_MODEL, system: request.system,
     user: request.messages.map(m => m.content).join('\n'), maxTokens: LIMITS.maxTokens

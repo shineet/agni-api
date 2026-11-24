@@ -426,3 +426,13 @@ test('a reply that is only a LOG line still says something', () => {
   const src = readFileSync(new URL('../api/_companion.js', import.meta.url), 'utf8');
   assert.match(src, /shapeReply\(spoken\) \|\| \(command \? 'One moment\.' : proposal \?/);
 });
+
+test('a spoken question tells the model the words may be misheard, a typed one does not', async () => {
+  const { buildRequest, SPOKEN } = await import('../api/_companion.js');
+  const spoken = buildRequest({ context: { v: 1 }, message: 'did I lock my breakfast', skills: true, spoken: true });
+  const typed = buildRequest({ context: { v: 1 }, message: 'did I lock my breakfast', skills: true });
+  assert.ok(spoken.system.includes(SPOKEN));
+  assert.ok(!typed.system.includes('HEARD, NOT TYPED'));
+  // The day summary stays last: data after the instructions.
+  assert.ok(spoken.system.indexOf('DAY SUMMARY') > spoken.system.indexOf('HEARD, NOT TYPED'));
+});
