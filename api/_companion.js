@@ -440,7 +440,8 @@ export async function companionHandler(req, res) {
   const { text: afterCommand, command } = splitCommand(afterFollowups);
   const { text: spoken, proposal } = splitLogProposal(afterCommand);
   return json(res, 200, {
-    reply: shapeReply(spoken) || (command ? 'One moment.' : shapeReply(spoken)), logProposal: command ? null : proposal,
+    // The model sometimes writes only the LOG or DO line. An empty reply reads as a failure on the phone.
+    reply: shapeReply(spoken) || (command ? 'One moment.' : proposal ? "Here's what I'll add. Check it, then say log." : "I didn't catch that. Could you say it another way?"), logProposal: command ? null : proposal,
     command: body.skills === 1 ? command : null, followups, requestId, safety: 'none', model: COMPANION_MODEL,
     usage: { input: usage.input_tokens ?? null, output: usage.output_tokens ?? null },
     costUSD, tookMs, mode: 'live'

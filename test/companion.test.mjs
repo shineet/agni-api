@@ -421,3 +421,8 @@ test('a DO line is taken off the text and only a listed command survives', async
   assert.ok(buildRequest({ context: ctx, message: 'hi', skills: true }).system.includes(SKILLS.trim().slice(0, 40)));
   assert.ok(!buildRequest({ context: ctx, message: 'hi' }).system.includes('IN THE APP'));
 });
+
+test('a reply that is only a LOG line still says something', () => {
+  const src = readFileSync(new URL('../api/_companion.js', import.meta.url), 'utf8');
+  assert.match(src, /shapeReply\(spoken\) \|\| \(command \? 'One moment\.' : proposal \?/);
+});
