@@ -408,3 +408,16 @@ test('the app\'s urgent-symptom list is the server\'s, so mock and live answer a
   const joined = [...swiftReply.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]).join('');
   assert.equal(joined, URGENT_REPLY);
 });
+
+test('a DO line is taken off the text and only a listed command survives', async () => {
+  const { splitCommand, buildRequest, SKILLS } = await import('../api/_companion.js');
+  assert.deepEqual(splitCommand('Let me look.\nDO: meals day=-1 slot=lunch'), { text: 'Let me look.', command: 'meals day=-1 slot=lunch' });
+  assert.equal(splitCommand('Sure.\nDO: open screen=camera.').command, 'open screen=camera');
+  assert.equal(splitCommand('x\nDO: lastate food=palak paneer').command, 'lastate food=palak paneer');
+  for (const bad of ['delete all', 'open screen=https://x.y', 'meals day=1; rm', 'lastate food=<b>', 'totals metric=money'])
+    assert.equal(splitCommand(`x\nDO: ${bad}`).command, null, bad);
+  assert.equal(splitCommand('What do you do? Do: nothing in particular here').command, null);
+  const ctx = { generatedAt: new Date().toISOString() };
+  assert.ok(buildRequest({ context: ctx, message: 'hi', skills: true }).system.includes(SKILLS.trim().slice(0, 40)));
+  assert.ok(!buildRequest({ context: ctx, message: 'hi' }).system.includes('IN THE APP'));
+});
