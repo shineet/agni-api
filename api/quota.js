@@ -9,6 +9,7 @@ import { contribMigration } from './_contrib-migration.js';
 import { deleteData } from './_deletion.js';
 import { dishCleanup } from './_dish-cleanup.js';
 import { costCapStops, costCapRestore } from './_cost-cap-restore.js';
+import { snoreHandler } from './_snore.js';
 
 /// The account endpoint: allowance, subscription sync and App Store
 /// notifications. One function, because Vercel's Hobby plan counts them and
@@ -22,6 +23,8 @@ import { costCapStops, costCapRestore } from './_cost-cap-restore.js';
 ///                                         root, linked to this install
 ///   POST /api/app-store-notifications     App Store Server Notifications V2
 ///                                         (rewritten here as ?op=notify)
+///   POST /api/snore                       two phones, one bed (rewritten here
+///                                         as ?op=snore; api/_snore.js)
 ///   POST /api/quota?op=delete-data        the person deletes what the server
 ///                                         holds about this phone, or (as the
 ///                                         purchaser) their subscription's
@@ -59,6 +62,8 @@ export default async function handler(req, res) {
   if (req.method === 'POST' && op === 'test-dish-cleanup') return dishCleanup(req, res, body);
   if (req.method === 'POST' && op === 'cost-cap-stops') return costCapStops(req, res, body);
   if (req.method === 'POST' && op === 'cost-cap-restore') return costCapRestore(req, res, body);
+  // Two phones, one bed: its own signed path and App Attest only (api/_snore.js).
+  if (op === 'snore') return snoreHandler(req, res, rawBody, body);
 
   const auth = await authenticate(req, {
     meterClass: MeterClass.read,
