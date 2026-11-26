@@ -66,7 +66,7 @@ footer a{color:var(--ink3)}
 
 <header>
   <div class="brand"><svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path fill="#F0894A" d="M12 1.6c.5 3.4-1.3 4.7-2.7 6.2C7.7 9.5 6.4 11 6.4 13.6a5.6 5.6 0 0 0 11.2 0c0-2-.8-3.3-1.8-4.6-.4 1-1 1.7-1.8 2.1.5-2.3-.1-4.6-2-9.5Z"/></svg><b>SHAI Health</b><span>Understand what shapes<br>how you feel.</span></div>
-  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; SHAI Health, formerly Agni Log &middot; Last updated 26 November 2026</p>
+  <p class="mono" style="margin:0 0 16px">Privacy Policy &middot; SHAI Health, formerly Agni Log &middot; Last updated 25 November 2026</p>
   <h1>Your food diary and your health data stay on your phone.</h1>
   <p class="lede">SHAI has <strong>no accounts and no sign-in</strong>, and it does not ask for your name. This page sets out what the app keeps on your phone, what it sends away and why, who receives it, and how long it is kept.</p>
 </header>
@@ -139,15 +139,6 @@ footer a{color:var(--ink3)}
   <li><strong>Free and Pro.</strong> Free accounts can ask Aura a few questions a day; SHAI Pro has a larger daily allowance. SHAI's server counts questions per day to apply this.</li>
 </ul>
 
-<h2>Snoring, mood and sharing a bed</h2>
-<p>These arrived in SHAI 1.3.</p>
-<ul>
-  <li><strong>Snore tracking listens only when you start it.</strong> When you tap to start a night, SHAI records the sound of the night on your iPhone, in locked storage that is not included in backups. In the morning it works out where the snoring was, on your iPhone, and then deletes the night&rsquo;s sound. It keeps what it found (when and how loudly you snored, and how sure it was moment to moment, but no sound) and, if you leave &ldquo;Keep the loudest sounds&rdquo; on, up to a dozen clips of about twelve seconds of snoring a night, never a moment in which someone spoke. Clips are kept for the period you choose and can be deleted one by one. Nothing about your nights is uploaded unless you share a bed with SHAI, below.</li>
-  <li><strong>Sharing a bed.</strong> If you and your partner both track snoring with SHAI in the same bed, you can pair your two iPhones in Settings &gt; Sleep &gt; Sharing a bed: one iPhone shows a code and the other types it, so both of you have to agree. Each paired iPhone then sends SHAI&rsquo;s server, for each night, the moments it was sure it heard a snore and how loud each one was compared with the quiet of the room. No sound, nothing that was said, and no cough or breathing readings. The other iPhone fetches them and decides, on the phone, which snores were yours and which your partner&rsquo;s. The server deletes a night&rsquo;s moments as soon as the other iPhone has compared with them, and after 7 days in any case. Stopping sharing on either iPhone deletes both iPhones&rsquo; nights from the server and ends the pairing.</li>
-  <li><strong>Daily mood check-in.</strong> How you feel, and the energy, stress and context you add, are kept on your iPhone only. They are not sent to SHAI&rsquo;s server or to Aura, and SHAI does not write them to Apple Health.</li>
-  <li><strong>Mood from Apple Health.</strong> If you turn on &ldquo;Import mood from Apple Health&rdquo;, SHAI asks Health for permission to read your State of Mind entries, reads them on your iPhone and shows them with a label. It never writes to State of Mind, and nothing it reads is uploaded.</li>
-</ul>
-
 <h2>What leaves your device, and why</h2>
 <div class="tw">
 <table>
@@ -218,12 +209,6 @@ footer a{color:var(--ink3)}
     <td>Vercel, which runs SHAI's server</td>
     <td>Kept in Vercel's request logs (see below). SHAI's server separately keeps a salted, one-way hash of it, only to stop one address flooding the service, and normally removes it soon after it is a day old.</td>
   </tr>
-  <tr>
-    <td><b>Snore moments for sharing a bed</b> (time, how loud over the room&rsquo;s quiet, how sure; no sound)</td>
-    <td>Only when you have paired with your partner&rsquo;s iPhone, after each tracked night</td>
-    <td>SHAI's server, then your partner&rsquo;s iPhone</td>
-    <td>Kept until your partner&rsquo;s iPhone has compared with them, at most 7 days</td>
-  </tr>
 </table>
 </div>
 <p>Daily totals of requests by feature and by app version are also kept, with no identifier of any kind, so I can see whether a new build is working.</p>
@@ -254,8 +239,6 @@ footer a{color:var(--ink3)}
   <tr><td><b>Vercel request logs</b> (IP address, time and the web address requested; for food searches that address includes the search text, and for allowance checks the install identifier. Never photos or the body of a request)</td><td>Up to 30 days. No server or database logs are forwarded to any other service.</td></tr>
   <tr><td><b>Database backups</b></td><td>Deleted records stay in SHAI's daily database backups until those backups expire, up to 7 days later.</td></tr>
   <tr><td><b>Beta invitation email and name</b></td><td>Kept until you ask me to delete it.</td></tr>
-  <tr><td><b>Snore tracking</b></td><td>The night&rsquo;s sound is deleted on your phone as soon as it is worked out, the next morning. What was found stays on your phone until you delete the night. Clips: for the period you choose (7, 30 or 90 days, or for good). Shared snore moments: on SHAI&rsquo;s server until your partner&rsquo;s iPhone has compared, at most 7 days; deleted at once when either of you stops sharing.</td></tr>
-  <tr><td><b>Mood check-ins</b></td><td>On your phone until you delete them or the app. Not on SHAI's server.</td></tr>
 </table>
 </div>
 
