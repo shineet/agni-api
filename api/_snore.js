@@ -7,7 +7,8 @@
 //     pair-join  { code }           -> { paired: true }
 //     status                        -> { paired, code?, since? }
 //     unpair                        -> { unpaired: true }           both phones' nights and the pair go
-//     put { began, ended, marks }   -> { kept: true }               marks: { v: 1, base, b64 }, kept as given
+//     put { began, ended, marks }   -> { kept: true }               marks: { v: 2, start, step, b64 } (209: loudness every
+//                                                                   five minutes, replacing the row) or { v: 1, base, b64 } (208)
 //     get { from, to }              -> { paired, nights: [...] }    the partner's nights in that time
 //     compared { from, to }         -> { deleted }                  the partner's marks for that time are dropped
 //
@@ -21,7 +22,7 @@ import { authenticate, recordAuth, MeterClass } from './_auth.js';
 import { supabaseRPC } from './_supabase.js';
 import { resolveCaller } from './_caller.js';
 
-export const SNORE_LIMITS = { marksB64: 400_000, codeDigits: 6, nightHours: 16 };
+export const SNORE_LIMITS = { marksB64: 400_000, levelsB64: 120_000, codeDigits: 6, nightHours: 16 };
 
 function when(v) {
   const t = Date.parse(v);
@@ -38,7 +39,13 @@ export function validateSnore(action, body) {
       const b = when(body.began), e = when(body.ended), m = body.marks;
       if (!b || !e || Date.parse(e) <= Date.parse(b)) return 'began and ended must be times, ended after began';
       if (Date.parse(e) - Date.parse(b) > SNORE_LIMITS.nightHours * 3600_000) return 'a night is at most 16 hours';
-      if (!m || m.v !== 1 || !Number.isFinite(m.base) || typeof m.b64 !== 'string') return 'marks must be { v: 1, base, b64 }';
+      // v2 (SHAI 209): the night's loudness so far, sent every five minutes. v1 (208): snore marks, kept so 208 still works.
+      if (m && m.v === 2) {
+        if (!Number.isFinite(m.start) || m.step !== 0.75 || typeof m.b64 !== 'string') return 'levels must be { v: 2, start, step: 0.75, b64 }';
+        if (m.b64.length > SNORE_LIMITS.levelsB64 || !/^[A-Za-z0-9+/]*={0,2}$/.test(m.b64)) return 'levels too large or not base64';
+        return null;
+      }
+      if (!m || m.v !== 1 || !Number.isFinite(m.base) || typeof m.b64 !== 'string') return 'marks must be { v: 2, start, step, b64 } or { v: 1, base, b64 }';
       if (m.b64.length > SNORE_LIMITS.marksB64 || !/^[A-Za-z0-9+/]*={0,2}$/.test(m.b64)) return 'marks too large or not base64';
       return null;
     }
@@ -82,7 +89,9 @@ export async function snoreHandler(req, res, rawBody, body) {
     status: () => supabaseRPC('agni_snore_status', { p_device: device }),
     unpair: () => supabaseRPC('agni_snore_unpair', { p_device: device }),
     put: () => supabaseRPC('agni_snore_put', { p_device: device, p_began: when(body.began), p_ended: when(body.ended),
-                                               p_marks: { v: 1, base: body.marks.base, b64: body.marks.b64 } }),
+                                               p_marks: body.marks.v === 2
+                                                 ? { v: 2, start: body.marks.start, step: 0.75, b64: body.marks.b64 }
+                                                 : { v: 1, base: body.marks.base, b64: body.marks.b64 } }),
     get: () => supabaseRPC('agni_snore_get', { p_device: device, p_from: when(body.from), p_to: when(body.to) }),
     compared: () => supabaseRPC('agni_snore_compared', { p_device: device, p_from: when(body.from), p_to: when(body.to) })
   }[action];

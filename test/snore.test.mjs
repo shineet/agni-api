@@ -15,10 +15,20 @@ test('snore: a night that is fine is taken', () => {
   for (const a of ['clock', 'pair-start', 'status', 'unpair']) assert.equal(validateSnore(a, {}), null);
 });
 
+test('snore: 209 loudness every five minutes is taken, and bounded', () => {
+  const levels = { v: 2, start: 1795672484.62, step: 0.75, b64: Buffer.alloc(4800, 7).toString('base64') };
+  assert.equal(validateSnore('put', { began, ended, marks: levels }), null);
+  assert.ok(validateSnore('put', { began, ended, marks: { ...levels, step: 1 } }));
+  assert.ok(validateSnore('put', { began, ended, marks: { ...levels, start: 'soon' } }));
+  assert.ok(validateSnore('put', { began, ended, marks: { ...levels, b64: 'A'.repeat(SNORE_LIMITS.levelsB64 + 4) } }));
+  // a whole 16 hour night fits: 76,800 steps of a byte
+  assert.equal(validateSnore('put', { began, ended, marks: { ...levels, b64: Buffer.alloc(76_800, 1).toString('base64') } }), null);
+});
+
 test('snore: what is not a night is refused', () => {
   assert.ok(validateSnore('put', { began: ended, ended: began, marks }));
   assert.ok(validateSnore('put', { began, ended: '2026-11-27T05:54:44Z', marks }), 'longer than 16 hours');
-  assert.ok(validateSnore('put', { began, ended, marks: { ...marks, v: 2 } }));
+  assert.ok(validateSnore('put', { began, ended, marks: { ...marks, v: 3 } }));
   assert.ok(validateSnore('put', { began, ended, marks: { ...marks, b64: 'not base64!' } }));
   assert.ok(validateSnore('put', { began, ended, marks: { ...marks, b64: 'A'.repeat(SNORE_LIMITS.marksB64 + 4) } }));
   assert.ok(validateSnore('pair-join', { code: '12345' }));
