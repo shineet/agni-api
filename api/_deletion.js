@@ -131,5 +131,11 @@ export async function deleteData(req, res, auth, body) {
     return refuse(res, 409, 'requestInFlight',
       'A request from this phone is still being processed. Nothing was deleted. Try again in a minute.');
   }
+  // Two phones, one bed: this phone's shared snore nights and its pairing (migrations/2026-11-26-snore-partners.sql).
+  // Before that migration runs the function does not exist, so a failure here must not fail the deletion above.
+  if (scope === 'device') {
+    try { await supabaseRPC('agni_snore_forget', { p_device: deviceSubject }); }
+    catch (error) { report('deletion snore', new Error('snore forget failed')); }
+  }
   return json(res, 200, shape(scope, rows));
 }

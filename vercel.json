@@ -44,6 +44,10 @@
       "destination": "/api/research?op=companion"
     },
     {
+      "source": "/api/snore",
+      "destination": "/api/quota?op=snore"
+    },
+    {
       "source": "/api/app-store-notifications",
       "destination": "/api/quota?op=notify"
     },
