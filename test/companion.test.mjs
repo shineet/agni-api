@@ -17,7 +17,8 @@ import * as h from './helpers/harness.mjs';
 h.setTestEnv({ COMPANION_ENABLED: 'true' });
 const {
   validateContext, validateHistory, isUrgent, URGENT_REPLY, buildRequest, renderContext, shapeReply,
-  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, stripMealWords, splitFollowups, companionLimits, FREE_PER_DAY
+  SYSTEM, COMPANION_MODEL, LIMITS, splitLogProposal, stripMealWords, splitFollowups, companionLimits, FREE_PER_DAY,
+  SYSTEM_DEEP, DEEP
 } = await import('../api/_companion.js');
 
 const skip = !h.enabled && 'AGNI_TEST_PG not set';
@@ -424,7 +425,43 @@ test('a DO line is taken off the text and only a listed command survives', async
 
 test('a reply that is only a LOG line still says something', () => {
   const src = readFileSync(new URL('../api/_companion.js', import.meta.url), 'utf8');
-  assert.match(src, /shapeReply\(spoken\) \|\| \(command \? 'One moment\.' : proposal \?/);
+  assert.match(src, /shapeReply\(spoken, \{ deep \}\) \|\| \(command \? 'One moment\.' : proposal \?/);
+});
+
+// DEPTH (SHAI 1.3 build 215 on): the last 14 days, general knowledge and web search; older builds unchanged.
+const pastDay = { date: '2026-11-25 Wednesday', kcal: 2100, proteinG: 95, carbsG: 240, fatG: 70, budgetKcal: 2200,
+  meals: ['lunch at 13:10: Chicken biryani 520 kcal 22 g protein; Raita 80 kcal'], skipped: ['breakfast'],
+  workouts: ['running 40 min 380 active kcal'], sleepHours: 6.8, waterGlasses: 5 };
+
+test('past is accepted only from a build that asked for depth', () => {
+  const ctx = { generatedAt: new Date().toISOString(), past: { days: [pastDay], usualFoods: ['Chicken biryani 520 kcal'], latestWeight: '82.5 kilograms' } };
+  assert.equal(validateContext(ctx), 'context.past is not allowed');
+  assert.equal(validateContext(ctx, { deep: true }), null);
+  assert.match(validateContext({ ...ctx, past: { days: [{ ...pastDay, secret: 'x' }] } }, { deep: true }), /not allowed/);
+  assert.match(validateContext({ ...ctx, past: { days: Array(15).fill(pastDay) } }, { deep: true }), /short list/);
+  // A heavy fortnight fits; the old ceiling would refuse it.
+  const heavy = { ...ctx, past: { days: Array(14).fill({ ...pastDay, meals: Array(8).fill('x'.repeat(230)) }), usualFoods: Array(30).fill('y'.repeat(78)) } };
+  assert.ok(Buffer.byteLength(JSON.stringify(heavy)) > LIMITS.contextBytes);
+  assert.equal(validateContext(heavy, { deep: true }), null);
+});
+
+test('a deep request gets the deep instructions and web search; an old one does not', () => {
+  const ctx = { generatedAt: new Date().toISOString() };
+  const deep = buildRequest({ context: ctx, message: 'calories in biryani', deep: true });
+  assert.ok(deep.system.startsWith(SYSTEM_DEEP.slice(0, 60)));
+  assert.equal(deep.tools?.[0]?.type, 'web_search_20250305');
+  assert.equal(deep.max_tokens, DEEP.maxTokens);
+  const old = buildRequest({ context: ctx, message: 'hi', skills: true });
+  assert.ok(old.system.startsWith(SYSTEM.slice(0, 60)));
+  assert.equal(old.tools, undefined);
+  assert.ok(!/\bAgni\b/.test(SYSTEM) && !/\bAgni\b/.test(SYSTEM_DEEP), 'the app is SHAI now');
+});
+
+test('a deep reply may run to four sentences, with no citations or links spoken', () => {
+  const four = 'One. Two. Three. Four. Five.';
+  assert.equal(shapeReply(four), 'One. Two. Three.');
+  assert.equal(shapeReply(four, { deep: true }), 'One. Two. Three. Four.');
+  assert.equal(shapeReply('Biryani is about 500 calories [1]. See https://example.com/x for more.', { deep: true }), 'Biryani is about 500 calories. See for more.');
 });
 
 test('a spoken question tells the model the words may be misheard, a typed one does not', async () => {
