@@ -1,0 +1,5 @@
+# DRAFT for the privacy page, SHAI 1.3 (NOT LIVE)
+
+Held until Apple approves SHAI 1.2 (Shine: the page stays at the 25 November version until then). Add to the Aura section.
+
+**What Aura sees (from SHAI 1.3).** To answer, SHAI sends your question, the conversation's earlier messages, a summary of today and your last 14 days in SHAI to our server, which asks an AI model from Anthropic to write the reply. The 14 days are your food log (each meal with its foods, calories and protein, daily totals, your budget, skipped meals and water) and the foods you eat most. If you share your Health data with Aura, they also include your workouts, sleep hours and latest weight from those two weeks. Notes, photos, raw Health records and your voice are never sent. For general food questions Aura may search the web; a search contains only the words of the question, never your log. Nothing Aura is sent is stored on our server or used to train models; each request is answered and discarded, and only the request's size, cost and outcome are recorded.
